@@ -65,6 +65,7 @@ export class EvmLane {
       await this.waitLive(account.address);
       return await fn({ publicClient: this.publicClient, walletClient: this.wallet(account), account, chain: this.chain, opened });
     } finally {
+      this.opts.native.resync(account.address);
       await this.opts.native.sendOrThrow(account, [closeEvmWindowMsg(account.address)]);
     }
   }

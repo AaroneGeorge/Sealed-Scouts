@@ -7,3 +7,4 @@ export * from "./operator.js";
 export * from "./relay.js";
 export * from "./rewards.js";
 export * from "./state.js";
+export * from "./evil.js";

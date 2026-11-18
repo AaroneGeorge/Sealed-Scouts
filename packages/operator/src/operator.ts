@@ -33,12 +33,13 @@ import {
 } from "@sealed-scouts/core";
 import { ledgerKeyOf, type LedgerKey } from "@sealed-scouts/scout";
 import { anchorSignature } from "./anchor.js";
+import { evilMedianFor, retireEvilMedian, withEvilMedian, type EvilMedian } from "./evil.js";
 import { timingOf, type DeploymentFile } from "./deployment.js";
 import { replayLedger, type SettledBatch } from "./ledger.js";
 import { buildOpenings, openPayload } from "./opener.js";
 import { Relayer } from "./relay.js";
 import { addInBand, joinsFrom, rewardLines } from "./rewards.js";
-import type { OperatorState, StateStore } from "./state.js";
+import { RUN_DIR, type OperatorState, type StateStore } from "./state.js";
 
 /** Do not post an OPEN this close to the end of the open window: it might land too late. */
 const OPEN_SAFETY_BLOCKS = 3n;
@@ -52,6 +53,8 @@ export interface OperatorDeps {
   /** Account that relays rounds to PriceFeed; none = no relay. */
   relayer?: Account;
   store: StateStore;
+  /** Use the deployment's demo timing. */
+  demo?: boolean;
   log?: (line: string) => void;
 }
 
@@ -73,7 +76,7 @@ export class Operator {
     const { deployment: dep, chain } = d;
     this.rest = new RestClient(chain.config.rest, { fetch: chain.fetch });
     this.params = {
-      ...timingOf(dep),
+      ...timingOf(dep, d.demo),
       quorum: dep.params.quorum,
       bandBps: dep.params.bandBps,
       slashBps: dep.params.slashBps,
@@ -162,12 +165,14 @@ export class Operator {
       return;
     }
     const inboxEnd = plan.input.inboxEnd;
-    const att = toAttestation(result, {
+    const honest = toAttestation(result, {
       index: plan.input.batchIndex,
       inboxStart: inboxEnd - BigInt(plan.entries.length),
       inboxEnd,
       closeTime: await this.blockTime(result.closeHeight),
     });
+    const lie = this.evilMedian(round, result);
+    const att = lie ? withEvilMedian(honest, lie) : honest;
     const rh = roundHash(att, { chainId: BigInt(dep.evmChainId), rollupId: dep.rollupId });
     const vsh = fromHex(rh);
     const sig = anchorSignature(this.d.operator, {
@@ -182,6 +187,7 @@ export class Operator {
       submitBatchMsg({ sequencer: this.d.operator.address, ...plan.input, validatorSetHash: vsh, anchorSignature: sig }),
     ]);
     this.ledger = plan.ledger;
+    if (lie) retireEvilMedian(lie);
     this.batches.push({
       batchIndex: Number(plan.input.batchIndex),
       status: "submitted",
@@ -213,7 +219,20 @@ export class Operator {
       batch: { index: plan.input.batchIndex, stateRoot: toHex(plan.input.stateRoot), txCount: plan.input.txCount, submitTx: tx.txHash },
       anchorSignature: toHex(sig),
       relayed,
+      ...(lie ? { evilMedian: { feedId: lie.feedId, posted: lie.price, honest: honest.medians[honest.feedIds.indexOf(lie.feedId)] } } : {}),
     });
+  }
+
+  /** The demo lie for this round, if one is set and the feed has a median to replace. Logged loudly. */
+  private evilMedian(round: bigint, result: RoundResult): EvilMedian | undefined {
+    const lie = evilMedianFor(round, RUN_DIR);
+    if (!lie) return undefined;
+    if (!result.medians.some((m) => m.feedId === lie.feedId)) {
+      this.log(`!!! EVIL MEDIAN requested for round ${round} feed ${lie.feedId} (${lie.source}) but the feed has no median; posting the honest round`);
+      return undefined;
+    }
+    this.log(`!!! EVIL MEDIAN DEMO: round ${round} feed ${lie.feedId} will be posted as ${lie.price} instead of the derived median (${lie.source})`);
+    return lie;
   }
 
   // ---- 3. reward ----

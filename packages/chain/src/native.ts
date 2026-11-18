@@ -156,6 +156,14 @@ export class NativeLane {
     return BigInt(r.balance.amount ?? "0");
   }
 
+  /**
+   * Forget the cached sequence of `address`. Call it after EVM transactions: the account's EVM nonce and
+   * its native sequence are the same counter, so EVM txs move it without this lane seeing them.
+   */
+  resync(address: string): void {
+    this.seqs.delete(address);
+  }
+
   // ---- internals ----
 
   private get sdkFetch() {

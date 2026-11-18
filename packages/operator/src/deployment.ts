@@ -1,6 +1,7 @@
-// deployments/diana.json: what every other package reads about the live rollup. Written by the launch
-// script; the scout package parses the same shape (packages/scout/src/deployment.ts).
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+// deployments/diana.json: what every other package reads about the live rollup. Track C's launch script owns
+// every key except `contracts`, which Track B's deploy script fills in. Both merge into the file and keep the
+// other's keys. The scout package parses the same shape (packages/scout/src/deployment.ts).
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { DEFAULT_RULES, DEFAULT_TIMING, type RoundTiming } from "@sealed-scouts/core";
 
@@ -30,6 +31,12 @@ export interface DeploymentFile {
     /** Ledger uqor per in-band report. */
     rewardPerReportUqor: string;
   };
+  /**
+   * Shorter rounds for live demos (`loop --demo`, `scout --demo`). Its own genesisHeight defaults to the main one.
+   * PriceFeed only accepts increasing round numbers, so switch a running deployment between the two timings
+   * only with a genesisHeight that keeps round numbers growing.
+   */
+  demo?: { roundBlocks: string; commitBlocks: string; openBlocks: string; revealBlocks: string; genesisHeight?: string };
   /** qor1 accounts eligible to report. */
   scouts: string[];
   contracts: { PriceFeed?: `0x${string}`; ScoutLend?: `0x${string}` };
@@ -53,17 +60,31 @@ export function readDeployment(path = DEPLOYMENT_PATH): DeploymentFile | undefin
   return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as DeploymentFile) : undefined;
 }
 
-export function writeDeployment(d: DeploymentFile, path = DEPLOYMENT_PATH): void {
+/** Keys Track C writes. Everything else in the file (Track B's `contracts`, anything added later) is kept. */
+export type OwnKeys = Omit<DeploymentFile, "contracts">;
+
+/** Read-modify-write: replace only Track C's keys, keep the rest of the file as it is. */
+export function mergeDeployment(mine: OwnKeys, path = DEPLOYMENT_PATH): DeploymentFile {
+  const current = existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>) : {};
+  const merged = { ...current, ...mine, contracts: (current.contracts as DeploymentFile["contracts"]) ?? {} };
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(d, null, 2) + "\n");
+  writeFileSync(path + ".tmp", JSON.stringify(merged, null, 2) + "\n");
+  renameSync(path + ".tmp", path);
+  return merged;
 }
 
-export function timingOf(d: DeploymentFile): RoundTiming {
+export function defaultDemo(): NonNullable<DeploymentFile["demo"]> {
+  return { roundBlocks: "90", commitBlocks: "45", openBlocks: "15", revealBlocks: "15" };
+}
+
+/** Round timing of the deployment, or of its demo block when `demo` is set (falling back to the main timing). */
+export function timingOf(d: DeploymentFile, demo = false): RoundTiming {
+  const t = demo && d.demo ? d.demo : d.params;
   return {
-    genesisHeight: BigInt(d.genesisHeight),
-    roundBlocks: BigInt(d.params.roundBlocks),
-    commitBlocks: BigInt(d.params.commitBlocks),
-    openBlocks: BigInt(d.params.openBlocks),
-    revealBlocks: BigInt(d.params.revealBlocks),
+    genesisHeight: BigInt((demo && d.demo?.genesisHeight) || d.genesisHeight),
+    roundBlocks: BigInt(t.roundBlocks),
+    commitBlocks: BigInt(t.commitBlocks),
+    openBlocks: BigInt(t.openBlocks),
+    revealBlocks: BigInt(t.revealBlocks),
   };
 }

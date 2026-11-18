@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start, stop or check the operator loop as a detached process that outlives the shell.
-#   ops/operator.sh start | stop | status | log
+#   ops/operator.sh start [--demo] | stop | status | log
 # Logs: $B/run/operator.log, pid: $B/run/operator.pid (B = the folder above the repo).
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,7 +17,7 @@ case "${1:-status}" in
     # shellcheck disable=SC1091
     source "$REPO/ops/env.local.sh"
     cd "$REPO/packages/operator"
-    setsid nohup node --import tsx src/loop.ts >>"$LOG" 2>&1 </dev/null &
+    setsid nohup node --import tsx src/loop.ts "${@:2}" >>"$LOG" 2>&1 </dev/null &
     echo $! >"$PID"
     echo "started (pid $!), log $LOG"
     ;;

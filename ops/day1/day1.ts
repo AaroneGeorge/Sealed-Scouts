@@ -224,9 +224,23 @@ async function evm() {
 
 const steps: Record<string, () => Promise<void>> = { anchor, keys, classical, post, evm };
 const step = process.argv[2] ?? "all";
-const run = step === "all" ? [keys, classical, post, evm] : steps[step] ? [steps[step]!] : [];
-if (run.length === 0) {
+const names = step === "all" ? ["keys", "classical", "post", "evm"] : steps[step] ? [step] : [];
+if (names.length === 0) {
   console.error(`unknown step ${step}: use anchor | keys | classical | post | evm | all`);
   process.exit(1);
 }
-for (const s of run) await s();
+// Each step runs even if an earlier one failed (they are independent once keys exist); the summary says which.
+const summary: { step: string; ok: boolean; error?: string; seconds: number }[] = [];
+for (const name of names) {
+  const t = Date.now();
+  try {
+    await steps[name]!();
+    summary.push({ step: name, ok: true, seconds: (Date.now() - t) / 1000 });
+  } catch (err) {
+    const error = (err as Error).message.split("\n")[0]!;
+    console.error(`step ${name} failed: ${error}`);
+    summary.push({ step: name, ok: false, error, seconds: (Date.now() - t) / 1000 });
+  }
+}
+if (step === "all") save("summary", { finishedAt: new Date().toISOString(), steps: summary });
+process.exitCode = summary.every((s) => s.ok) ? 0 : 1;

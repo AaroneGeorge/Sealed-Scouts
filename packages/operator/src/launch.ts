@@ -1,4 +1,4 @@
-// npm run launch -w @sealed-scouts/operator -- --yes [--demo] [--scouts SCOUT1,SCOUT2,SCOUT3] [--reward-pool QOR]
+// npm run launch -w @sealed-scouts/operator -- --yes [--scouts SCOUT1,SCOUT2,SCOUT3] [--reward-pool QOR]
 // Creates the rollup (qledger-v1, optimistic, based), bonds the submitter, registers the operator's ML-DSA-87 and
 // ML-KEM keys, funds the reward pool on the ledger, and writes deployments/diana.json. Every step is skipped
 // when already done, so a failed launch can simply be run again. Needs about 12,000 test QOR on OPERATOR.
@@ -12,7 +12,7 @@ import {
 } from "@qorechain/rdk";
 import { chain, loadAccount, type Role } from "@sealed-scouts/chain";
 import { ledgerKeyOf } from "@sealed-scouts/scout";
-import { defaultParams, readDeployment, writeDeployment, DEPLOYMENT_PATH, type DeploymentFile } from "./deployment.js";
+import { defaultDemo, defaultParams, mergeDeployment, readDeployment, DEPLOYMENT_PATH, type OwnKeys } from "./deployment.js";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(name);
@@ -93,22 +93,21 @@ await step("rewardPoolDeposit", async () => {
 const scoutRoles = option("--scouts", "SCOUT1,SCOUT2,SCOUT3").split(",") as Role[];
 const scouts = await Promise.all(scoutRoles.map(async (r) => (await loadAccount(r)).address));
 const height = BigInt(await rest.getLatestHeight());
-const p = defaultParams();
-if (flag("--demo")) Object.assign(p, { roundBlocks: "90", commitBlocks: "45", openBlocks: "15", revealBlocks: "15", rewardEpochRounds: 3 });
+const same = prior?.rollupId === ROLLUP_ID;
 
-const deployment: DeploymentFile = {
+const deployment: OwnKeys = {
   chainId: c.config.chainId,
   evmChainId: c.config.evmChainId,
   rollupId: ROLLUP_ID,
   operator: op.address,
   operatorEvm: op.evm,
   // Keep the round clock of an earlier launch: rounds already posted must keep their numbers.
-  genesisHeight: prior?.rollupId === ROLLUP_ID ? prior.genesisHeight : String(height + GENESIS_DELAY_BLOCKS),
+  genesisHeight: same ? prior.genesisHeight : String(height + GENESIS_DELAY_BLOCKS),
   createdHeight: String(rollup.createdHeight),
-  params: prior?.rollupId === ROLLUP_ID ? prior.params : p,
+  params: same ? prior.params : defaultParams(),
+  demo: same && prior.demo ? prior.demo : defaultDemo(),
   scouts,
-  contracts: prior?.contracts ?? {},
   txs,
 };
-writeDeployment(deployment);
+mergeDeployment(deployment);
 console.log(`wrote ${DEPLOYMENT_PATH}: rollup ${ROLLUP_ID}, rounds start at height ${deployment.genesisHeight}`);

@@ -41,6 +41,7 @@ export class Relayer {
       gas: (gas * GAS_MARGIN_PCT) / 100n,
     });
     const rc = await pub.waitForTransactionReceipt({ hash });
+    this.chain.native.resync(this.account.address);
     return { hash, gasUsed: rc.gasUsed, status: rc.status };
   }
 }

@@ -8,23 +8,142 @@ Build Before Q-Day fest (Protocol Builders track).
 QoreChain has no price oracle yet, so no lending, stablecoin or DCA app on it can read a fair price. Oracles are
 also the best Q-Day target: whoever forges the reporters' signatures can drain every app that trusts the feed.
 
-## How it works (plan)
+![Architecture](docs/images/architecture.svg)
 
-1. **Bonded scouts** report prices each round (fETH, fBTC, fUSD from public exchange APIs, plus one real-world feed).
-2. **Sealed reports.** Each report is sealed with ML-KEM-1024 until the round closes, so scouts can't copy each
-   other's answers.
-3. **Rollup.** A rollup takes the median, signs each batch with ML-DSA-87 and settles it on QoreChain with a
-   settlement receipt.
-4. **Watchtower.** An independent watcher re-runs every batch from its data, challenges a wrong median and slashes
-   scouts whose reports fall far outside the band.
-5. **Withdrawals.** Scouts withdraw their bond and rewards back to QoreChain.
-6. **Consumer.** A small demo lending contract on the EVM side accepts a price only with a valid receipt, checked
-   through the `pqcVerify` precompile.
+## How it works
+
+1. **Bonded scouts** report prices each round: fETH, fBTC and fUSD, each from three public exchange APIs.
+2. **Sealed reports.** Each report is sealed with ML-KEM-1024 (QoreSeal) to the opener's registered key, and its
+   salted commitment is signed with ML-DSA-87. Until the round closes, a report is only ciphertext, so scouts can't
+   copy each other.
+3. **Rollup.** The reports go into the inbox of the rollup `sealed-scouts-1` on QoreChain's own rollup module. After
+   close the operator opens every report, and everyone can derive the same median from the same inbox data.
+4. **Signed batches.** Every batch is a hybrid transaction and carries the creator's ML-DSA-87 anchor signature. The
+   price round's hash rides inside that signed anchor.
+5. **Verified on chain.** `PriceFeed.sol` on the QoreChain EVM rebuilds the anchor bytes and checks the same signature
+   with the `pqcVerify` precompile, using the key it reads from `pqcKeyStatus`. A new price is pending until its
+   challenge window ends.
+6. **Watchtower.** An independent watcher replays every round and batch from chain data. A wrong median is challenged
+   in the feed contract, which recomputes it and slashes the operator's bond. A wrong ledger root is challenged with
+   the chain's own fraud proof.
+7. **Withdrawals.** Scouts are paid on the rollup ledger and withdraw to QoreChain with a Merkle proof.
+8. **Consumer.** `ScoutLend.sol`, a small demo lender, reads only final, fresh prices.
+
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Message formats and interfaces: [docs/SPEC.md](docs/SPEC.md).
+
+## Check it yourself, with no key
+
+You need Node 22. Nothing below needs an account, a wallet or a private key.
+
+```bash
+git clone https://github.com/AaroneGeorge/Sealed-Scouts && cd Sealed-Scouts
+npm ci
+npm run judge
+```
+
+`npm run judge` reads the rollup from the public testnet, builds the latest batch's settlement receipt, runs the six
+receipt checks, shows that a copy with one changed digit is refused, verifies the same ML-DSA-87 anchor signature
+through `pqcVerify` on the EVM, and checks that the anchor covers the latest price round. It prints PASS, FAIL or
+SKIP per check and finishes in well under two minutes. While a part is not live yet it says SKIP, never PASS.
+
+The same receipt checks run on any rollup: `npm run judge -- --rollup vigil-1`.
+
+The demo page does the same in your browser. Open its **Verify** tab and press **Verify on chain**: the page reads
+the batch and its anchor, rebuilds the signed bytes, and calls `pqcVerify` with a plain `eth_call`. Tick
+"Change one digit first" to watch the same signature fail.
+
+Every claim in this README has a transaction or a repeatable read in [PROOF.md](PROOF.md).
+
+## Fest requirements
+
+| Requirement | Where |
+|---|---|
+| Rollup or sidechain | Rollup `sealed-scouts-1` on QoreChain's `x/rdk` module ([PROOF.md](PROOF.md) row 1) |
+| ML-DSA-signed batches | Hybrid batch transactions plus the creator's ML-DSA-87 anchor signature, which also covers the price round |
+| Withdrawal | Ledger withdrawals executed on QoreChain with `MsgExecuteWithdrawal` |
+| Verified settlement receipt | Six RDK checks off chain, and `PriceFeed.verifyReceipt` on chain; `npm run judge` |
+| Watchtower | `packages/watchtower`: ledger fraud proofs and the median court; public status feed |
+| ML-KEM data protection | Reports sealed with ML-KEM-1024 to a key in the chain's KEM registry |
+| Threat model | [THREAT_MODEL.md](THREAT_MODEL.md), with limits in [LIMITS.md](LIMITS.md) |
+
+## Run it locally
+
+```bash
+npm ci
+npm test                 # unit tests in every package
+npm run typecheck
+npm run test:contracts   # Foundry: forge test (needs Foundry installed)
+```
+
+The demo page and its read API:
+
+```bash
+npm run fixtures -w @sealed-scouts/api   # sample feed files (marked as sample data on the page)
+npm run dev -w @sealed-scouts/api        # read API on http://127.0.0.1:8790, serving the sample feed
+npm run dev -w @sealed-scouts/web        # page on http://127.0.0.1:5173
+```
+
+Build the page with `bun run build` (or `npm run build`) in `apps/web`. The API then serves the built page too, so
+one process is enough: `npm start -w @sealed-scouts/api`. Settings are environment variables: `PORT`, `HOST`,
+`FEED_DIR`, `EVIDENCE_DIR`, `DEPLOYMENTS_FILE`, `WEB_DIST`, `RATE_PER_MIN`, `TRUST_PROXY`. Hosting steps are in
+[docs/RUNBOOK.md](docs/RUNBOOK.md).
+
+Running scouts, the operator or a watchtower that sends transactions needs funded testnet keys. Scripts read keys from
+environment variables only; see `.env.example`. Keys never go in the repository.
+
+## Repository
+
+| Path | What |
+|---|---|
+| `packages/core` | Message codecs, round derivation, hashes, Merkle tree |
+| `packages/chain` | Accounts, hybrid transactions, inbox reader, EVM windows |
+| `packages/operator` | Launch, sequencer loop, opener, rewards, relay |
+| `packages/scout` | Price adapters, sealing, signing, posting, withdrawals |
+| `packages/watchtower` | Ledger and round replay, challenges, status feed |
+| `packages/attacks` | Stolen-key attack, evil operator, bad batch, red-team run |
+| `contracts` | `PriceFeed.sol`, `ScoutLend.sol` (Foundry) |
+| `apps/api` | Read-only API: feed files plus whitelisted QoreChain reads; `judge` and `proof` scripts |
+| `apps/web` | Demo page (Vite + React) |
+| `deployments` | Testnet addresses and parameters |
+
+## Kits used
+
+Every QoreChain kit in this project, with credit. All are published by QoreChain under Apache-2.0.
+
+| Kit | Version | Used for |
+|---|---|---|
+| [`@qorechain/rdk`](https://github.com/qorechain/qorechain-rdk) | 0.9.0 | Rollup creation, batches, anchors, settlement receipts, fraud proofs, withdrawals, ledger replay |
+| [`@qorechain/sdk`](https://github.com/qorechain/qorechain-sdk) | 0.14.0 | Accounts, hybrid secp256k1 + ML-DSA-87 transaction signing, chain reads |
+| [`@qorechain/evm`](https://github.com/qorechain/qorechain-sdk) | 0.14.0 | EVM windows and calls to the QoreChain EVM |
+| [`@qorechain/pqc`](https://github.com/qorechain/qorechain-pqc) | 0.2.3 | ML-DSA-87 keys and signatures, ML-KEM, SHAKE-256 |
+| [`@qorechain/qoreseal`](https://github.com/qorechain/qoreseal) | 0.1.0 | Sealing reports with ML-KEM-1024 |
+| [`@qorechain/qoresign`](https://github.com/qorechain/qoresign) | 0.2.0 | Commitment signatures in the QoreSign message format |
+
+Network features used: the `x/rdk` rollup module, `x/multilayer` anchors, the PQC and KEM key registries, the
+`pqcVerify` (`0x…0a01`) and `pqcKeyStatus` (`0x…0a02`) EVM precompiles, scoped EVM windows, and the fest test tokens
+fETH, fBTC and fUSD.
+
+Other open-source work we build on, with thanks: [viem](https://github.com/wevm/viem),
+[noble](https://github.com/paulmillr/noble-hashes) and [scure](https://github.com/paulmillr/scure-base) libraries,
+[CosmJS](https://github.com/cosmos/cosmjs), [Foundry](https://github.com/foundry-rs/foundry) and forge-std,
+[React](https://react.dev), [Vite](https://vite.dev), [Vitest](https://vitest.dev), [tsx](https://tsx.is). Fonts:
+Fraunces and IBM Plex (SIL Open Font License), served by Google Fonts.
+
+## Docs
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): components and one round step by step
+- [docs/SPEC.md](docs/SPEC.md): message formats, hashes, contract interface
+- [THREAT_MODEL.md](THREAT_MODEL.md): assets, actors, attacks and what stops each
+- [LIMITS.md](LIMITS.md): what this does not do yet
+- [PROOF.md](PROOF.md): a transaction or a repeatable read for every claim
+- [SECURITY.md](SECURITY.md): how to report a problem
+- [docs/RUNBOOK.md](docs/RUNBOOK.md): running and hosting the services
 
 ## Status
 
 Work in progress during the fest (4 Nov to 2 Dec 2026). Network: QoreChain testnet `qorechain-diana`
-(EVM chain id 9800).
+(EVM chain id 9800). Testnet only; the contracts are not audited. [PROOF.md](PROOF.md) shows which claims already
+have on-chain evidence.
 
 ## License
 

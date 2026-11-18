@@ -1,0 +1,12 @@
+{
+ "name": "stolen-keys (sample)",
+ "note": "Sample data shipped with the repo so the page has something to show. Not a run: live runs replace it.",
+ "at": "2026-11-19T00:00:00.000Z",
+ "steps": [
+  { "attack": "stolen-keys", "step": "scout 1 posts a report signed with its classical key only", "verdict": "REFUSED", "where": "chain", "evidence": { "rule": "hybrid_signature_mode=required" } },
+  { "attack": "stolen-keys", "step": "scout 2 posts a report signed with its classical key only", "verdict": "REFUSED", "where": "chain", "evidence": { "rule": "hybrid_signature_mode=required" } },
+  { "attack": "stolen-keys", "step": "scout 3 posts a report signed with its classical key only", "verdict": "REFUSED", "where": "chain", "evidence": { "rule": "hybrid_signature_mode=required" } },
+  { "attack": "stolen-keys", "step": "the attacker's own hybrid account reports fETH = $1", "verdict": "REFUSED", "where": "rollup", "evidence": { "reason": "not-eligible" } },
+  { "attack": "stolen-keys", "step": "a forged round is sent to PriceFeed.postRound", "verdict": "REFUSED", "where": "evm", "evidence": { "revert": "BadAnchorSignature" } }
+ ]
+}

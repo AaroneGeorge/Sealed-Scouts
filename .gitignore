@@ -3,11 +3,21 @@ dist/
 build/
 out/
 cache/
+coverage/
+graphify-out/
+.DS_Store
+*.log
+
+# Secrets: never committed. Only .env.example ships.
 .env
 .env.*
 !.env.example
-*.log
-.DS_Store
-coverage/
-graphify-out/
 .secrets/
+# Loads mnemonics from the server's secret store into a shell; it holds none itself and must stay that way.
+ops/env.local.sh
+
+# Local service output. The watchtower writes feed/; long-running services keep pids and logs in run/.
+/feed/
+/run/
+# Attack dry runs are local only; live runs (no ".dry-run") are evidence for PROOF.md.
+packages/attacks/evidence/*.dry-run.json

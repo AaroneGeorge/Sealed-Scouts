@@ -1,0 +1,20 @@
+{
+  "name": "@sealed-scouts/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only proxy, cache and feed server for the Sealed Scouts demo page.",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "dev": "FEED_DIR=apps/api/fixtures/feed EVIDENCE_DIR=apps/api/fixtures/evidence tsx watch src/server.ts",
+    "judge": "tsx scripts/judge.ts",
+    "proof": "tsx scripts/proof.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p .",
+    "fixtures": "cd ../../packages/watchtower && tsx src/cli.ts --observe --fixture demo --once --feed-dir ../../apps/api/fixtures/feed"
+  },
+  "dependencies": {
+    "@qorechain/rdk": "0.9.0",
+    "viem": "2.58.0"
+  }
+}

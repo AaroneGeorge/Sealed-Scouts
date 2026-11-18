@@ -1,0 +1,249 @@
+{
+ "round": "0",
+ "verdict": "match",
+ "status": "ok",
+ "openHeight": "1000",
+ "closeHeight": "1180",
+ "medians": [
+  {
+   "feedId": 1,
+   "price": "175400000000",
+   "count": 5
+  },
+  {
+   "feedId": 2,
+   "price": "6257000000000",
+   "count": 5
+  },
+  {
+   "feedId": 3,
+   "price": "99930000",
+   "count": 5
+  }
+ ],
+ "reportsRoot": "0x5ddbaa8dd9b7598adab66d7d9f6360706f12d324e8a979eb8578f1c28c355c52",
+ "reports": [
+  {
+   "scout": "qor134s38tk7avkjstzx2hel6lu64flmvxfjemj430",
+   "reportBytes": 1772,
+   "commitBytes": 4672,
+   "height": "1005",
+   "counted": true,
+   "prices": [
+    {
+     "feedId": 1,
+     "price": "175470160000"
+    },
+    {
+     "feedId": 2,
+     "price": "6259502800000"
+    },
+    {
+     "feedId": 3,
+     "price": "99969972"
+    }
+   ]
+  },
+  {
+   "scout": "qor1ertass06w3v0w5pujucn2rh6fev52j58huvcmq",
+   "reportBytes": 1772,
+   "commitBytes": 4672,
+   "height": "1005",
+   "counted": true,
+   "prices": [
+    {
+     "feedId": 1,
+     "price": "175400000000"
+    },
+    {
+     "feedId": 2,
+     "price": "6257000000000"
+    },
+    {
+     "feedId": 3,
+     "price": "99930000"
+    }
+   ]
+  },
+  {
+   "scout": "qor1m4hkec32jflhn5p4202984470zjg5eqphglrj4",
+   "reportBytes": 1772,
+   "commitBytes": 4672,
+   "height": "1005",
+   "counted": true,
+   "prices": [
+    {
+     "feedId": 1,
+     "price": "175329840000"
+    },
+    {
+     "feedId": 2,
+     "price": "6254497200000"
+    },
+    {
+     "feedId": 3,
+     "price": "99890028"
+    }
+   ]
+  },
+  {
+   "scout": "qor1n4wzf9yk02l39x0h8c53lj45xjr9lyc2g0zrez",
+   "reportBytes": 1772,
+   "commitBytes": 4672,
+   "height": "1005",
+   "counted": true,
+   "prices": [
+    {
+     "feedId": 1,
+     "price": "175435080000"
+    },
+    {
+     "feedId": 2,
+     "price": "6258251400000"
+    },
+    {
+     "feedId": 3,
+     "price": "99949986"
+    }
+   ]
+  },
+  {
+   "scout": "qor1zkjxvfg7p2z9sqpuwrgaq06c7wgcn0gxy74kq3",
+   "reportBytes": 1772,
+   "commitBytes": 4672,
+   "height": "1005",
+   "counted": true,
+   "prices": [
+    {
+     "feedId": 1,
+     "price": "175364920000"
+    },
+    {
+     "feedId": 2,
+     "price": "6255748600000"
+    },
+    {
+     "feedId": 3,
+     "price": "99910014"
+    }
+   ]
+  }
+ ],
+ "leaves": [
+  {
+   "round": "0",
+   "scout": "0x15a466251e0a8458003c70d1d03f58f39189bd06",
+   "salt": "0xd071ff354a988c746b2f09bb1965839a",
+   "feedIds": [
+    1,
+    2,
+    3
+   ],
+   "prices": [
+    "175364920000",
+    "6255748600000",
+    "99910014"
+   ],
+   "commitSigHash": "0xeac0b604572381acd576bae6ea5c3932cbf65908235bd6620b6fc5e01a87a6fb"
+  },
+  {
+   "round": "0",
+   "scout": "0x8d6113aedeeb2d282c4655f3fd7f9aaa7fb61932",
+   "salt": "0xed5d8626037560790d679cd653daab99",
+   "feedIds": [
+    1,
+    2,
+    3
+   ],
+   "prices": [
+    "175470160000",
+    "6259502800000",
+    "99969972"
+   ],
+   "commitSigHash": "0x1c59115a589cfaa94034a3f2902ebe6613646faefbb7a3e2da1425590e1584af"
+  },
+  {
+   "round": "0",
+   "scout": "0x9d5c2494967abf1299f73e291fcab434865f930a",
+   "salt": "0x56320a0a665c59986ff934173cfad352",
+   "feedIds": [
+    1,
+    2,
+    3
+   ],
+   "prices": [
+    "175435080000",
+    "6258251400000",
+    "99949986"
+   ],
+   "commitSigHash": "0x10f9fb65cf04f77694342720e27952ddacdc50fab90227cc5f3302d666d8261e"
+  },
+  {
+   "round": "0",
+   "scout": "0xc8d7d841fa7458f7503c9731350efa4e59454a87",
+   "salt": "0x460bff2f3bcdb6b78bc1001080d69b21",
+   "feedIds": [
+    1,
+    2,
+    3
+   ],
+   "prices": [
+    "175400000000",
+    "6257000000000",
+    "99930000"
+   ],
+   "commitSigHash": "0xdedb5e33f6c9374b88b0c0baa54564d9cc3fd5550f56b089d901e32d1606c9d7"
+  },
+  {
+   "round": "0",
+   "scout": "0xdd6f6ce22a927f79d03553d453d6be78a48a6401",
+   "salt": "0xd820f2aa05ecc08923da483311f107b8",
+   "feedIds": [
+    1,
+    2,
+    3
+   ],
+   "prices": [
+    "175329840000",
+    "6254497200000",
+    "99890028"
+   ],
+   "commitSigHash": "0x9f28dd9488e27dee07e5280023a90fe8ec55164193ebbf94ffcda978a6451dbe"
+  }
+ ],
+ "outliers": [],
+ "inBand": [
+  "0x15a466251e0a8458003c70d1d03f58f39189bd06",
+  "0x8d6113aedeeb2d282c4655f3fd7f9aaa7fb61932",
+  "0x9d5c2494967abf1299f73e291fcab434865f930a",
+  "0xc8d7d841fa7458f7503c9731350efa4e59454a87",
+  "0xdd6f6ce22a927f79d03553d453d6be78a48a6401"
+ ],
+ "rejected": [],
+ "operator": {
+  "openPosted": true,
+  "leftOut": []
+ },
+ "feed": {
+  "status": "final",
+  "feedIds": [
+   1,
+   2,
+   3
+  ],
+  "medians": [
+   "175400000000",
+   "6257000000000",
+   "99930000"
+  ],
+  "counts": [
+   5,
+   5,
+   5
+  ],
+  "reportsRoot": "0x5ddbaa8dd9b7598adab66d7d9f6360706f12d324e8a979eb8578f1c28c355c52",
+  "reportCount": 5,
+  "batchIndex": "0"
+ },
+ "challenges": []
+}

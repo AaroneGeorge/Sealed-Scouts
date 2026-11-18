@@ -20,7 +20,9 @@
     "demo:bad-batch": "npm run -s -w @sealed-scouts/attacks demo:bad-batch --",
     "redteam": "npm run -s -w @sealed-scouts/attacks redteam --",
     "launch": "npm run -s -w @sealed-scouts/operator launch --",
-    "receipt": "npm run -s -w @sealed-scouts/operator receipt --"
+    "receipt": "npm run -s -w @sealed-scouts/operator receipt --",
+    "judge": "npm run -s -w @sealed-scouts/api judge --",
+    "proof": "npm run -s -w @sealed-scouts/api proof --"
   },
   "devDependencies": {
     "@types/node": "^22.7.5",

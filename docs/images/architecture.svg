@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" width="1200" height="720" font-family="Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">Sealed Scouts architecture</title>
+  <desc id="d">Scout bots post sealed reports to a QoreChain rollup inbox. The operator opens them, takes the median and submits a batch whose ML-DSA-87 anchor signature also covers the round hash. PriceFeed on the QoreChain EVM checks that signature with pqcVerify. A watchtower replays everything and can slash the operator. A read-only API and demo page let anyone check it.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#c9a24b"/>
+    </marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#e2574c"/>
+    </marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#46b98f"/>
+    </marker>
+    <pattern id="lat" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
+      <circle cx="3" cy="3" r="1" fill="rgba(255,240,225,0.55)"/>
+    </pattern>
+    <style>
+      .box{fill:#161a20;stroke:#2f3641;stroke-width:1.5}
+      .chain{fill:#12161c;stroke:#c9a24b;stroke-width:1.5;stroke-dasharray:6 5}
+      .h{fill:#ece6d8;font-size:17px;font-weight:700}
+      .s{fill:#8e96a3;font-size:12.5px}
+      .m{fill:#c9a24b;font-size:12px;font-family:Menlo,Consolas,monospace}
+      .lbl{fill:#ece6d8;font-size:12px}
+      .ln{stroke:#c9a24b;stroke-width:1.6;fill:none}
+      .red{stroke:#e2574c;stroke-width:1.6;fill:none;stroke-dasharray:5 4}
+      .grn{stroke:#46b98f;stroke-width:1.6;fill:none}
+    </style>
+  </defs>
+  <rect width="1200" height="720" fill="#0e1014"/>
+
+  <!-- Title -->
+  <circle cx="44" cy="40" r="15" fill="#d4502f"/><circle cx="44" cy="40" r="9" fill="url(#lat)" stroke="rgba(255,235,215,.5)"/>
+  <text x="70" y="47" fill="#ece6d8" font-size="22" font-weight="700" font-family="Georgia, serif">Sealed Scouts</text>
+  <text x="236" y="47" class="s">a post-quantum price-oracle rollup on QoreChain testnet (qorechain-diana)</text>
+
+  <!-- Scouts -->
+  <rect x="30" y="110" width="210" height="150" rx="12" class="box"/>
+  <text x="48" y="140" class="h">Scout bots (3 to 5)</text>
+  <text x="48" y="162" class="s">read 3 exchanges each</text>
+  <text x="48" y="182" class="s">seal the report to the opener</text>
+  <text x="48" y="202" class="s">sign the commitment</text>
+  <text x="48" y="230" class="m">QoreSeal · QoreSign · SDK</text>
+  <text x="48" y="248" class="m">ML-KEM-1024 · ML-DSA-87</text>
+
+  <!-- Operator -->
+  <rect x="30" y="300" width="210" height="150" rx="12" class="box"/>
+  <text x="48" y="330" class="h">Operator</text>
+  <text x="48" y="352" class="s">opens reports after close</text>
+  <text x="48" y="372" class="s">derives the median</text>
+  <text x="48" y="392" class="s">submits the anchored batch</text>
+  <text x="48" y="412" class="s">relays the round to the EVM</text>
+  <text x="48" y="438" class="m">RDK · SDK · viem</text>
+
+  <!-- QoreChain frame -->
+  <rect x="290" y="80" width="560" height="600" rx="16" class="chain"/>
+  <text x="310" y="106" fill="#c9a24b" font-size="13" font-weight="700" letter-spacing="1.5">QORECHAIN TESTNET</text>
+
+  <rect x="310" y="120" width="250" height="120" rx="10" class="box"/>
+  <text x="326" y="146" class="h">Rollup inbox</text>
+  <text x="326" y="166" class="s">sealed-scouts-1 on x/rdk</text>
+  <text x="326" y="186" class="s">orders, stamps and commits to</text>
+  <text x="326" y="204" class="s">REPORT · COMMIT · OPEN · REVEAL</text>
+  <text x="326" y="226" class="m">hybrid tx required</text>
+
+  <rect x="580" y="120" width="250" height="120" rx="10" class="box"/>
+  <text x="596" y="146" class="h">qledger-v1 ledger</text>
+  <text x="596" y="166" class="s">scout rewards and withdrawals</text>
+  <text x="596" y="186" class="s">chain re-runs it in a fraud proof</text>
+  <text x="596" y="204" class="s">1,000 QOR submitter bond</text>
+  <text x="596" y="226" class="m">MsgExecuteWithdrawal</text>
+
+  <rect x="310" y="260" width="520" height="100" rx="10" class="box"/>
+  <text x="326" y="286" class="h">Batch anchor (x/multilayer)</text>
+  <text x="326" y="308" class="s">creator's ML-DSA-87 signature over chain id, rollup, batch, state root, tx count</text>
+  <text x="326" y="328" class="s">and the price round's hash, in the validator_set_hash slot</text>
+  <text x="326" y="348" class="m">anchor bytes v2 · 180 bytes · signature 4,627 bytes</text>
+
+  <rect x="310" y="380" width="290" height="56" rx="10" class="box"/>
+  <text x="326" y="404" class="h">PQC registry</text>
+  <text x="326" y="424" class="s">ML-DSA-87 keys · ML-KEM-1024 opener key</text>
+
+  <!-- EVM -->
+  <rect x="310" y="456" width="520" height="206" rx="10" fill="#1a1f27" stroke="#2f3641" stroke-width="1.5"/>
+  <text x="326" y="482" fill="#c9a24b" font-size="13" font-weight="700" letter-spacing="1.5">QORECHAIN EVM · CHAIN 9800</text>
+  <rect x="326" y="496" width="300" height="150" rx="9" class="box"/>
+  <text x="342" y="522" class="h">PriceFeed.sol</text>
+  <text x="342" y="544" class="s">postRound: rebuilds anchor bytes,</text>
+  <text x="342" y="562" class="s">pqcVerify against the creator's key</text>
+  <text x="342" y="580" class="s">challenge window, median court,</text>
+  <text x="342" y="598" class="s">operator bond slashed on a lie</text>
+  <text x="342" y="626" class="m">0x…0a01 pqcVerify · 0x…0a02</text>
+  <rect x="642" y="496" width="172" height="150" rx="9" class="box"/>
+  <text x="658" y="522" class="h">ScoutLend.sol</text>
+  <text x="658" y="544" class="s">fUSD loans on</text>
+  <text x="658" y="562" class="s">fETH collateral</text>
+  <text x="658" y="580" class="s">reads readFinal:</text>
+  <text x="658" y="598" class="s">final, fresh only</text>
+
+  <!-- Watchtower -->
+  <rect x="900" y="110" width="270" height="200" rx="12" class="box"/>
+  <text x="918" y="140" class="h">Watchtower (anyone)</text>
+  <text x="918" y="162" class="s">replays every batch and round</text>
+  <text x="918" y="182" class="s">from chain data, no key needed</text>
+  <text x="918" y="210" class="s">wrong ledger root:</text>
+  <text x="918" y="228" class="m">MsgChallengeBatch</text>
+  <text x="918" y="254" class="s">wrong median:</text>
+  <text x="918" y="272" class="m">challengeMedian</text>
+  <text x="918" y="296" class="m">RDK · viem</text>
+
+  <!-- Read side -->
+  <rect x="900" y="360" width="270" height="110" rx="12" class="box"/>
+  <text x="918" y="390" class="h">Read API (apps/api)</text>
+  <text x="918" y="412" class="s">feed JSON + whitelisted REST reads</text>
+  <text x="918" y="432" class="s">cache, rate limit, GET only,</text>
+  <text x="918" y="452" class="s">holds no keys</text>
+
+  <rect x="900" y="510" width="270" height="150" rx="12" class="box"/>
+  <text x="918" y="540" class="h">Demo page · npm run judge</text>
+  <text x="918" y="562" class="s">live rounds, sealed tiles,</text>
+  <text x="918" y="582" class="s">attack evidence, lender view</text>
+  <text x="918" y="606" class="s">"Verify on chain": 6 receipt</text>
+  <text x="918" y="626" class="s">checks + pqcVerify by eth_call,</text>
+  <text x="918" y="646" class="s">no wallet</text>
+
+  <!-- Arrows: scouts -> inbox -->
+  <path d="M240 170 H305" class="ln" marker-end="url(#a)"/>
+  <text x="246" y="160" class="lbl">REPORT</text>
+  <text x="246" y="190" class="lbl">COMMIT</text>
+  <!-- operator -> inbox (OPEN) -->
+  <path d="M240 330 C270 330 270 225 305 222" class="ln" marker-end="url(#a)"/>
+  <text x="250" y="290" class="lbl">OPEN</text>
+  <!-- operator -> anchor -->
+  <path d="M240 370 H305" class="ln" marker-end="url(#a)"/>
+  <text x="244" y="362" class="lbl">batch</text>
+  <!-- operator -> PriceFeed -->
+  <path d="M135 450 V570 H321" class="ln" marker-end="url(#a)"/>
+  <text x="146" y="562" class="lbl">postRound (anyone can relay)</text>
+  <!-- anchor -> PriceFeed signature reuse -->
+  <path d="M715 360 V448 H600 V491" class="ln" marker-end="url(#a)"/>
+  <text x="626" y="400" class="lbl">same signature,</text>
+  <text x="626" y="418" class="lbl">checked again on the EVM</text>
+  <!-- ScoutLend reads PriceFeed -->
+  <path d="M637 572 H626" class="grn"/>
+  <path d="M630 572 H637" class="grn" marker-end="url(#g)"/>
+  <!-- Watchtower challenges -->
+  <path d="M900 222 H835" class="red" marker-end="url(#r)"/>
+  <path d="M1035 310 V340 H860 V560 H831" class="red" marker-end="url(#r)"/>
+  <text x="868" y="420" class="lbl" fill="#e2574c" transform="rotate(-90 868 420)">challenge</text>
+  <!-- Watchtower feed -> API -->
+  <path d="M1110 310 V355" class="grn" marker-end="url(#g)"/>
+  <text x="1118" y="338" class="lbl">feed JSON</text>
+  <!-- API -> page -->
+  <path d="M1035 470 V505" class="grn" marker-end="url(#g)"/>
+  <!-- page -> EVM eth_call -->
+  <path d="M900 640 H835" class="grn" marker-end="url(#g)"/>
+  <text x="852" y="702" class="lbl">eth_call: pqcKeyStatus, pqcVerify, verifyReceipt</text>
+</svg>

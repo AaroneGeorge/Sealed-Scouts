@@ -7,7 +7,7 @@ import {
   REJECT, anchorSignBytes, deriveRound, phaseOf, roundHash, roundWindows, toAttestation, type InboxEntry, type RoundParams,
 } from "@sealed-scouts/core";
 import { ScoutEligibility, chain as defaultChain, loadAccount, registry, wrapAccount, type Chain } from "@sealed-scouts/chain";
-import { loadDeployment, registeredKemKey, timingOf, type Deployment } from "@sealed-scouts/scout";
+import { loadDeployment, registeredKemKey, timingOf, useDemo, type Deployment } from "@sealed-scouts/scout";
 import { PRICE_FEED_ABI, SimRollup, simIdentity } from "@sealed-scouts/watchtower";
 import { randomBytes } from "node:crypto";
 import { createWalletClient, http } from "viem";
@@ -94,7 +94,7 @@ export function windowVerdict(e: unknown): Step["verdict"] {
 export async function stolenKeysLive(opts: { demo?: boolean; chain?: Chain } = {}): Promise<Step[]> {
   const chain = opts.chain ?? defaultChain();
   const d = needDeployment();
-  const timing = timingOf(d, opts.demo ?? false);
+  const timing = timingOf(d, useDemo(d, opts.demo));
   const attacker = await loadAccount("ATTACKER");
   const opener = await registeredKemKey(chain, d.operator);
   const height = BigInt(await chain.inbox.rest.getLatestHeight());
@@ -130,10 +130,14 @@ export async function stolenKeysLive(opts: { demo?: boolean; chain?: Chain } = {
     // The operator's eligibility rule, read at the round's close (or now, if the round is still open).
     const eligibility = new ScoutEligibility(chain.evm.publicClient, d.scouts, d.priceFeed);
     const closeHeight = roundWindows(round, timing).commitEnd;
-    await eligibility.snapshot(round, closeHeight < posted.height ? closeHeight : posted.height);
-    const result = deriveRound(entries, round, { ...timing, ...d.rules, chainId: d.chainId, rollupId: d.rollupId, operator: d.operator, pqKeyOf: (s) => pq.get(s) }, eligibility.eligible);
-    const reason = result.rejected.find((r) => r.scout === attacker.address)?.reason ?? "counted";
-    steps.push({ attack: A, step: "ATTACKER: post $1 report from its own account", verdict: reason === REJECT.notEligible ? "REFUSED" : "NOT REFUSED", where: "rollup", evidence: { txHash: posted.txHash, deriveRound: reason } });
+    const snap = await eligibility.snapshot(round, closeHeight < posted.height ? closeHeight : posted.height);
+    if (snap.status === "unknown") {
+      steps.push({ attack: A, step: "ATTACKER: post $1 report from its own account", verdict: "ERROR", where: "rollup", evidence: { txHash: posted.txHash, eligibility: snap.reason } });
+    } else {
+      const result = deriveRound(entries, round, { ...timing, ...d.rules, chainId: d.chainId, rollupId: d.rollupId, operator: d.operator, pqKeyOf: (s) => pq.get(s) }, eligibility.eligible);
+      const reason = result.rejected.find((r) => r.scout === attacker.address)?.reason ?? "counted";
+      steps.push({ attack: A, step: "ATTACKER: post $1 report from its own account", verdict: reason === REJECT.notEligible ? "REFUSED" : "NOT REFUSED", where: "rollup", evidence: { txHash: posted.txHash, deriveRound: reason } });
+    }
   }
 
   if (d.priceFeed) {

@@ -37,6 +37,8 @@ export interface DeploymentFile {
    * only with a genesisHeight that keeps round numbers growing.
    */
   demo?: { roundBlocks: string; commitBlocks: string; openBlocks: string; revealBlocks: string; genesisHeight?: string };
+  /** The timing the running operator uses; written by the loop at start. Scouts and the web default to it. */
+  roundMode?: RoundMode;
   /** qor1 accounts eligible to report. */
   scouts: string[];
   contracts: { PriceFeed?: `0x${string}`; ScoutLend?: `0x${string}` };
@@ -71,6 +73,15 @@ export function mergeDeployment(mine: OwnKeys, path = DEPLOYMENT_PATH): Deployme
   writeFileSync(path + ".tmp", JSON.stringify(merged, null, 2) + "\n");
   renameSync(path + ".tmp", path);
   return merged;
+}
+
+export type RoundMode = "demo" | "normal";
+
+/** Write only `roundMode`; every other key stays as it is. */
+export function setRoundMode(mode: RoundMode, path = DEPLOYMENT_PATH): void {
+  const current = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  writeFileSync(path + ".tmp", JSON.stringify({ ...current, roundMode: mode }, null, 2) + "\n");
+  renameSync(path + ".tmp", path);
 }
 
 /** Write only `contracts` (for a deploy done from TypeScript); every other key stays as it is. */

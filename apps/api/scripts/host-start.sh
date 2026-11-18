@@ -8,10 +8,15 @@ cd "$(dirname "$0")/../../.."
 launched() { [ -f "$DEPLOYMENTS_FILE" ] && grep -q '"rollupId"' "$DEPLOYMENTS_FILE"; }
 if [ "${RUN_WATCHTOWER:-0}" = "1" ] && launched; then
   mkdir -p "$FEED_DIR"
+  # Replay with the operator's round timing: demo rounds when the deployment says "roundMode": "demo".
+  DEMO_FLAG=""
+  if node -e 'process.exit(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).roundMode === "demo" ? 0 : 1)' "$DEPLOYMENTS_FILE"; then
+    DEMO_FLAG="--demo"
+  fi
   (
     cd packages/watchtower
     while true; do
-      SS_DEPLOYMENT="$DEPLOYMENTS_FILE" node --import tsx src/cli.ts --observe --feed-dir "$FEED_DIR" || true
+      SS_DEPLOYMENT="$DEPLOYMENTS_FILE" node --import tsx src/cli.ts --observe $DEMO_FLAG --feed-dir "$FEED_DIR" || true
       echo "watchtower stopped; restarting in 10 s" >&2
       sleep 10
     done

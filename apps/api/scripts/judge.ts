@@ -19,6 +19,8 @@ import {
   type SettlementReceipt,
 } from "@qorechain/rdk";
 import { decodeFunctionResult, encodeFunctionData, type Abi, type Hex } from "viem";
+import { roundOf } from "@sealed-scouts/core";
+import { loadDeployment, timingOf, useDemo } from "@sealed-scouts/scout";
 import { REPO_ROOT } from "../src/config.js";
 import { USER_AGENT } from "../src/upstream.js";
 
@@ -137,37 +139,66 @@ interface RoundFile {
 }
 interface StatusFile { rollupId: string; latestRounds: { round: string }[] }
 
+/** How many rounds before the checked batch's round the local replay covers (late opens and reveals included). */
+const REPLAY_ROUNDS = 3n;
+const REPLAY_LIMIT_MS = 90_000;
+
 /**
  * Replays the rounds here, with the watchtower in observe mode (no key), into a temporary folder. This is the
- * strongest check: nothing from our servers is trusted. Returns the folder, or undefined if it did not finish in time.
+ * strongest check: nothing from our servers is trusted. Only a window of rounds around the checked batch is replayed,
+ * so the time stays flat as the rollup grows. Returns the folder, or a reason it could not finish.
  */
-async function replayLocally(): Promise<string | undefined> {
+async function replayLocally(rounds: { first: bigint; last: bigint } | "all", demo: boolean): Promise<{ dir?: string; why?: string; noWindow?: boolean }> {
   const dir = await mkdtemp(join(tmpdir(), "sealed-scouts-judge-"));
-  const child = spawn(process.execPath, ["--import", "tsx", "src/cli.ts", "--observe", "--once", "--feed-dir", dir],
-    { cwd: join(REPO_ROOT, "packages/watchtower"), stdio: "ignore" });
-  const timer = setTimeout(() => child.kill(), 90_000);
+  const only = rounds === "all" ? [] : ["--rounds", `${rounds.first}..${rounds.last}`, "--no-ledger"];
+  const flags = ["--observe", "--once", "--feed-dir", dir, ...only, demo ? "--demo" : "--no-demo"];
+  const child = spawn(process.execPath, ["--import", "tsx", "src/cli.ts", ...flags],
+    { cwd: join(REPO_ROOT, "packages/watchtower"), stdio: ["ignore", "ignore", "pipe"] });
+  let stderr = "";
+  child.stderr.on("data", (b) => (stderr += String(b)));
+  let timedOut = false;
+  const timer = setTimeout(() => ((timedOut = true), child.kill()), REPLAY_LIMIT_MS);
   const code = await new Promise<number | null>((r) => child.on("exit", r));
   clearTimeout(timer);
-  return code === 0 ? dir : undefined;
+  if (code === 0) return { dir };
+  if (timedOut) return { why: `it did not finish in ${REPLAY_LIMIT_MS / 1000} s` };
+  if (/Unknown option/i.test(stderr)) return { why: "this watchtower has no --rounds/--no-ledger flags yet", noWindow: true };
+  return { why: `it stopped: ${stderr.trim().split("\n").at(-1) ?? `exit ${code}`}` };
 }
 
-/** The watchtower feed: our own local replay, else a URL (the hosted demo), else a local folder. */
-async function feedReader(deployments: Deployments | undefined) {
-  if (!args["feed-url"] && !args["feed-dir"] && deployments) {
-    console.log("Replaying the rounds locally with the watchtower (observe mode, no key)...");
-    const dir = await replayLocally();
-    if (dir) return <T>(name: string) => readJson<T>(join(dir, name));
-    console.log("note: the local replay did not finish in 90 s; reading the published feed instead.");
+type FeedRead = <T>(name: string) => Promise<T | undefined>;
+
+/**
+ * The watchtower feed for the price-round checks: our own local replay by default; a published feed only when asked
+ * (--feed-url / --feed-dir) or when the replay cannot finish, and then the judge says so on every affected line.
+ */
+async function feedReader(deployments: Deployments | undefined, window: { rounds: { first: bigint; last: bigint }; demo: boolean } | undefined):
+  Promise<{ read: FeedRead; source: string; trusted: boolean }> {
+  if (!args["feed-url"] && !args["feed-dir"] && window) {
+    console.log(`Replaying rounds ${window.rounds.first} to ${window.rounds.last} locally with the watchtower (observe mode, ${window.demo ? "demo" : "normal"} timing, no key)...`);
+    let r = await replayLocally(window.rounds, window.demo);
+    if (r.noWindow) {
+      console.log(`note: ${r.why}; replaying every round instead (at most ${REPLAY_LIMIT_MS / 1000} s).`);
+      r = await replayLocally("all", window.demo);
+    }
+    if (r.dir) return { read: (name) => readJson(join(r.dir!, name)), source: "local replay", trusted: false };
+    console.log(`\x1b[33mWARNING: the local replay failed (${r.why}).\x1b[0m`);
   }
   const url = args["feed-url"] ?? (deployments?.demoUrl ? `${deployments.demoUrl.replace(/\/+$/, "")}/api/feed` : undefined);
   if (url) {
-    return async <T>(name: string): Promise<T | undefined> => {
-      const r = await politeFetch(`${url}/${name}`);
-      return r.ok ? ((await r.json()) as T) : undefined;
+    console.log(`\x1b[33mThe price-round checks below read the published feed at ${url}: they trust our watchtower's replay.\x1b[0m`);
+    return {
+      read: async (name) => {
+        const r = await politeFetch(`${url}/${name}`);
+        return r.ok ? r.json() : undefined;
+      },
+      source: "published feed",
+      trusted: true,
     };
   }
   const dir = args["feed-dir"] ?? join(REPO_ROOT, "feed");
-  return <T>(name: string) => readJson<T>(join(dir, name));
+  console.log(`The price-round checks below read the feed files in ${dir}.`);
+  return { read: (name) => readJson(join(dir, name)), source: `feed files in ${dir}`, trusted: true };
 }
 
 async function main() {
@@ -237,9 +268,18 @@ async function main() {
   }
 
   // 5. The watchtower's replay of the round in this batch, and the price round riding in the anchor: the signed
-  //    validator_set_hash equals the round hash in the feed. Run your own replay with no key:
-  //    npm run watchtower -w @sealed-scouts/watchtower -- --observe --once
-  const feed = await feedReader(deployments);
+  //    validator_set_hash equals the round hash in the feed. The replay covers the rounds that closed just before the
+  //    batch was submitted, with the operator's round timing (roundMode in the deployment, or SS_DEMO / --demo).
+  const deployment = loadDeployment(join(REPO_ROOT, "deployments/diana.json"));
+  const demo = useDemo(deployment);
+  let window: { rounds: { first: bigint; last: bigint }; demo: boolean } | undefined;
+  if (deployment) {
+    const timing = timingOf(deployment, demo);
+    const last = roundOf(BigInt(batch.submittedAt), timing);
+    window = { rounds: { first: last > REPLAY_ROUNDS ? last - REPLAY_ROUNDS : 0n, last }, demo };
+  }
+  const { read: feed, source, trusted } = await feedReader(deployments, window);
+  const from = trusted ? ` (from the ${source})` : "";
   const status = await feed<StatusFile>("status.json");
   let round: RoundFile | undefined;
   for (const r of [...(status?.latestRounds ?? [])].reverse()) {
@@ -249,7 +289,7 @@ async function main() {
       break;
     }
   }
-  if (round) line(round.verdict === "match" || round.verdict === "corrected" ? "PASS" : "FAIL", `Watchtower replay of round ${round.round}`, `verdict ${round.verdict}; PriceFeed status ${round.feed!.status}`);
+  if (round) line(round.verdict === "match" || round.verdict === "corrected" ? "PASS" : "FAIL", `Watchtower replay of round ${round.round}${from}`, `verdict ${round.verdict}; PriceFeed status ${round.feed!.status}`);
   const priceFeed = deployments?.contracts?.PriceFeed ?? deployments?.priceFeed;
   const twoSig = round?.twoSig ?? (priceFeed ? ((await evmCall(priceFeed, priceFeedAbi, "twoSigMode", [])) as boolean) : false);
   if (!round || !round.roundHash) {
@@ -257,7 +297,7 @@ async function main() {
       : !round ? `the feed has no round in batch ${batchIndex}` : "the feed does not carry the round hash yet");
   } else if (!twoSig) {
     const ok = anchor.vsh.toLowerCase() === round.roundHash.toLowerCase();
-    line(ok ? "PASS" : "FAIL", `Round ${round.round} bound into the anchor`, `anchor slot ${anchor.vsh}; feed round hash ${round.roundHash}`);
+    line(ok ? "PASS" : "FAIL", `Round ${round.round} bound into the anchor${from}`, `anchor slot ${anchor.vsh}; feed round hash ${round.roundHash}`);
   } else if (!round.anchorSig) {
     line("SKIP", "Creator signed the price round", "two-signature mode, but the feed does not carry the posted signatures yet");
   } else {
@@ -266,7 +306,7 @@ async function main() {
     const sameAnchor = sigs.length === 2 + 2 * SIG_HEX && hex0x(sigs.slice(2, 2 + SIG_HEX)).toLowerCase() === anchor.sig.toLowerCase();
     const okRound = sameAnchor && anchor.vsh === "0x" && (await evmCall(PQC_VERIFY, precompiles, "pqcVerify",
       [pubkey, hex0x(sigs.slice(2 + SIG_HEX)), roundSigBytes(rollupId, round.round, round.roundHash)])) === true;
-    line(okRound ? "PASS" : "FAIL", `Round ${round.round} signed by the creator (two-signature mode)`,
+    line(okRound ? "PASS" : "FAIL", `Round ${round.round} signed by the creator (two-signature mode)${from}`,
       `empty anchor slot: ${anchor.vsh === "0x"}; posted anchor signature is the chain's: ${sameAnchor}; round signature via pqcVerify: ${okRound}`);
   }
 

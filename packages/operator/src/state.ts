@@ -10,8 +10,14 @@ export interface OperatorState {
   lastOpened?: string;
   /** Last round whose batch was submitted (or found empty). */
   lastSettled?: string;
-  /** In-band reports of the current reward epoch. */
+  /** In-band reports not paid yet. Cleared only after the reward post landed. */
   tally: Tally;
+  /** Epoch-end round whose rewards are still to be paid. */
+  rewardDue?: string;
+  /** A reward post in flight: the ledger nonce it used, so a retry can tell whether it landed. */
+  rewardPosting?: { round: string; nonce: string };
+  /** Settled rounds still to be relayed to PriceFeed, ascending. */
+  pendingRelays: string[];
   /** Withdrawals already executed, as "batchIndex:globalIndex". */
   executed: string[];
 }
@@ -24,7 +30,8 @@ export class StateStore {
   }
 
   load(): OperatorState {
-    return existsSync(this.file) ? JSON.parse(readFileSync(this.file, "utf8")) : { tally: {}, executed: [] };
+    const fresh: OperatorState = { tally: {}, executed: [], pendingRelays: [] };
+    return existsSync(this.file) ? { ...fresh, ...JSON.parse(readFileSync(this.file, "utf8")) } : fresh;
   }
 
   /** Write then rename, so a crash never leaves half a file. */
@@ -33,11 +40,17 @@ export class StateStore {
     renameSync(this.file + ".tmp", this.file);
   }
 
-  /** One JSON record per round: what was derived, anchored and relayed. */
+  /** One JSON record per round: what was derived, anchored and relayed. Bigints are stored as strings. */
   saveRound(round: bigint, record: unknown): void {
+    const file = join(this.dir, "rounds", `${round}.json`);
     writeFileSync(
-      join(this.dir, "rounds", `${round}.json`),
+      file + ".tmp",
       JSON.stringify(record, (_k, v) => (typeof v === "bigint" ? v.toString() : v instanceof Uint8Array ? Buffer.from(v).toString("hex") : v), 2),
     );
+    renameSync(file + ".tmp", file);
+  }
+
+  loadRound(round: bigint): Record<string, any> {
+    return JSON.parse(readFileSync(join(this.dir, "rounds", `${round}.json`), "utf8"));
   }
 }

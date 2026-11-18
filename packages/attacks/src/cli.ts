@@ -4,19 +4,19 @@
 //   npm run demo:evil-median [-- --dry-run]   live: needs the operator's lie switch for one round
 //   npm run demo:bad-batch   [-- --dry-run] [-- --bond]   live: ROGUE locks (and loses) a 1,000 QOR bond
 //   npm run redteam          [-- --dry-run]
-// Live runs take --demo (or SS_DEMO=1) when the operator runs demo rounds, so they cut rounds the same way.
+// Live runs cut rounds as the operator does: --demo / --no-demo, else SS_DEMO, else "roundMode" in the deployment.
 import { parseArgs } from "node:util";
-import { demoFromEnv } from "@sealed-scouts/scout";
 import { badBatchDryRun, badBatchLive } from "./bad-batch.js";
 import { evilMedianDryRun, evilMedianLive } from "./evil-median.js";
 import { printSteps, recordClaims, saveEvidence, type Step } from "./evidence.js";
 import { stolenKeysDryRun, stolenKeysLive } from "./stolen-keys.js";
 
 const { values, positionals } = parseArgs({
+  allowNegative: true,
   allowPositionals: true,
   options: {
     "dry-run": { type: "boolean", default: false }, bond: { type: "boolean", default: false }, "timeout-min": { type: "string", default: "30" },
-    demo: { type: "boolean", default: demoFromEnv() },
+    demo: { type: "boolean" },
   },
 });
 const dry = values["dry-run"]!;

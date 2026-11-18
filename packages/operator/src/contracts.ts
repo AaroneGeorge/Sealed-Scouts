@@ -136,6 +136,24 @@ export async function verifyOnFeed(chain: Chain, feed: `0x${string}`, att: Round
   })) as boolean;
 }
 
+/** Whether PriceFeed already holds `round`, or a later round (which makes posting `round` impossible). */
+export async function feedProgress(chain: Chain, feed: `0x${string}`, round: bigint): Promise<{ posted: boolean; superseded: boolean }> {
+  const abi = artifact("PriceFeed").abi;
+  const pub = chain.evm.publicClient;
+  const r = (await pub.readContract({ address: feed, abi, functionName: "rounds", args: [round] })) as readonly unknown[];
+  const c = (await pub.readContract({ address: feed, abi, functionName: "cursor" })) as readonly [bigint, bigint, boolean];
+  return { posted: (r[1] as bigint) > 0n, superseded: c[2] && c[0] >= round };
+}
+
+/** The attestation as a round record stores it (bigints as strings), back in typed form. */
+export function attestationFromRecord(j: Record<string, any>): RoundAttestation {
+  return {
+    round: BigInt(j.round), batchIndex: BigInt(j.batchIndex), inboxStart: BigInt(j.inboxStart), inboxEnd: BigInt(j.inboxEnd),
+    closeHeight: BigInt(j.closeHeight), closeTime: BigInt(j.closeTime), feedIds: j.feedIds.map(Number),
+    medians: j.medians.map((m: string) => BigInt(m)), counts: j.counts.map(Number), reportsRoot: j.reportsRoot, reportCount: Number(j.reportCount),
+  };
+}
+
 export async function feedTwoSigMode(chain: Chain, feed: `0x${string}`): Promise<boolean> {
   return (await chain.evm.publicClient.readContract({ address: feed, abi: artifact("PriceFeed").abi, functionName: "twoSigMode" })) as boolean;
 }

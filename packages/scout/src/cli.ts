@@ -1,5 +1,6 @@
 // Scout bot.
 //   npm run scout -- --role SCOUT1 [--once] [--demo]      report every round (or once) on the live rollup
+//   (round timing: --demo / --no-demo, else SS_DEMO, else the operator's "roundMode" in deployments/diana.json)
 //   npm run scout -- --role SCOUT1 --once --dry-run       live prices, sealed REPORT + COMMIT printed, nothing posted
 //   npm run scout -- join --role SCOUT1                   post JOIN (the ledger account rewards go to)
 //   npm run scout -- withdraw --role SCOUT1 --amount <uqor> [--to qor1...]
@@ -8,7 +9,7 @@ import { generateMnemonic } from "@qorechain/sdk";
 import { generateSealKeys, open } from "@qorechain/qoreseal";
 import { decodeMsg, decodeReportPlaintext, phaseOf, reportAad, reportPurpose, toHex, verifyCommit } from "@sealed-scouts/core";
 import { accountFromMnemonic, chain as defaultChain, loadAccount, mnemonicEnvName } from "@sealed-scouts/chain";
-import { demoFromEnv, loadDeployment, timingOf, type Deployment } from "./deployment.js";
+import { loadDeployment, timingOf, useDemo, type Deployment } from "./deployment.js";
 import { joinPayload, ledgerKeyOf, nextNonce, withdrawalPayload } from "./ledger.js";
 import { assertBonded, liveScoutChain, registeredKemKey } from "./live.js";
 import { formatE8, politeGetJson, readPrices } from "./prices/index.js";
@@ -17,11 +18,12 @@ import { Scout, toPriceSet } from "./scout.js";
 import { VENUE_SETS, isScoutRole, type ScoutRole } from "./venue-sets.js";
 
 const { values, positionals } = parseArgs({
+  allowNegative: true,
   allowPositionals: true,
   options: {
     role: { type: "string", default: "SCOUT1" },
     once: { type: "boolean", default: false },
-    demo: { type: "boolean", default: demoFromEnv() },
+    demo: { type: "boolean" },
     "dry-run": { type: "boolean", default: false },
     amount: { type: "string" },
     to: { type: "string" },
@@ -87,7 +89,8 @@ async function run(): Promise<void> {
   const d = needDeployment();
   const account = await loadAccount(role);
   const chain = defaultChain();
-  const timing = timingOf(d, values.demo!);
+  const demo = useDemo(d, values.demo);
+  const timing = timingOf(d, demo);
   await assertBonded(chain, account, d.priceFeed, d.scouts);
   const scout = new Scout({
     config: { chainId: d.chainId, rollupId: d.rollupId, operator: d.operator, timing },
@@ -103,7 +106,7 @@ async function run(): Promise<void> {
     await scout.report(round);
     return;
   }
-  console.log(`${role} ${account.address} reporting on ${d.rollupId} (${values.demo ? "demo" : "normal"} rounds of ${timing.roundBlocks} blocks)`);
+  console.log(`${role} ${account.address} reporting on ${d.rollupId} (${demo ? "demo" : "normal"} rounds of ${timing.roundBlocks} blocks)`);
   for (;;) {
     await scout.tick().catch((e) => console.error(`${new Date().toISOString()} ${(e as Error).message}`));
     await new Promise((r) => setTimeout(r, Number(values["poll-ms"])));

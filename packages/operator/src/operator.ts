@@ -33,7 +33,7 @@ import {
 } from "@sealed-scouts/core";
 import { ledgerKeyOf, type LedgerKey } from "@sealed-scouts/scout";
 import { anchorSignature } from "./anchor.js";
-import { feedTwoSigMode, roundSignature } from "./contracts.js";
+import { attestationFromRecord, feedProgress, feedTwoSigMode, roundSignature } from "./contracts.js";
 import { evilMedianFor, retireEvilMedian, withEvilMedian, type EvilMedian } from "./evil.js";
 import { timingOf, type DeploymentFile } from "./deployment.js";
 import { replayLedger, type SettledBatch } from "./ledger.js";
@@ -41,6 +41,9 @@ import { buildOpenings, openPayload } from "./opener.js";
 import { Relayer } from "./relay.js";
 import { addInBand, joinsFrom, rewardLines } from "./rewards.js";
 import { RUN_DIR, type OperatorState, type StateStore } from "./state.js";
+
+/** A round whose relay keeps failing is given up after this many tries (the round record keeps the error). */
+const MAX_RELAY_ATTEMPTS = 3;
 
 /** Do not post an OPEN this close to the end of the open window: it might land too late. */
 const OPEN_SAFETY_BLOCKS = 3n;
@@ -120,6 +123,8 @@ export class Operator {
     await this.refreshEntries();
     await this.openRounds(height);
     await this.settleRounds(height);
+    await this.relayPending();
+    await this.payRewards();
     await this.executeWithdrawals();
     this.pruneEntries(height);
   }
@@ -146,6 +151,11 @@ export class Operator {
   }
 
   // ---- 2. settle ----
+  // Each stage persists its result before the next one starts, so a failure anywhere (and a restart) resumes
+  // without a second batch, a lost tally or a relay that overwrites a good record:
+  //   settle: batch sent -> lastSettled, tally, rewardDue, pendingRelays and the round record saved together;
+  //   relay:  one round at a time, ascending, skipped if PriceFeed already holds it or a later round;
+  //   reward: the tally is cleared only once the transfers are on the ledger.
 
   private async settleRounds(height: bigint): Promise<void> {
     if (this.state.lastOpened === undefined || this.state.lastSettled === undefined) return;
@@ -153,8 +163,6 @@ export class Operator {
       if (height < roundWindows(round, this.params).revealEnd) break;
       await this.refreshEntries();
       await this.settle(round);
-      this.state.lastSettled = String(round);
-      this.d.store.save(this.state);
     }
   }
 
@@ -162,7 +170,8 @@ export class Operator {
     const dep = this.d.deployment;
     await this.loadPqKeys(round);
     // Eligibility is read at the round's close height, the same snapshot every watchtower takes.
-    await this.eligibility.snapshot(round, roundWindows(round, this.params).commitEnd);
+    const snap = await this.eligibility.snapshot(round, roundWindows(round, this.params).commitEnd);
+    if (snap.status === "unknown") throw new Error(`round ${round}: eligibility unknown (${snap.reason}); retrying next tick`);
     const result = deriveRound(this.entries, round, this.params, this.eligibility.eligible);
     this.eligibility.forget(round);
 
@@ -170,8 +179,13 @@ export class Operator {
     try {
       plan = await planQledgerBatch(this.rest, { ...this.env, submitter: this.d.operator.address, ledger: this.ledger });
     } catch (err) {
-      this.log(`round ${round}: no batch now (${(err as Error).message}); the round is recorded but not anchored`);
-      this.d.store.saveRound(round, { round, result: summary(result), anchored: false, reason: (err as Error).message });
+      const reason = (err as Error).message;
+      // Only an empty inbox ends the round unanchored; any other failure is retried on the next tick.
+      if (!/nothing to settle/.test(reason)) throw err;
+      this.log(`round ${round}: nothing to settle; recorded, not anchored`);
+      this.state.lastSettled = String(round);
+      this.d.store.saveRound(round, { round, result: summary(result), anchored: false, reason });
+      this.d.store.save(this.state);
       return;
     }
     const inboxEnd = plan.input.inboxEnd;
@@ -193,39 +207,21 @@ export class Operator {
       txCount: plan.input.txCount,
       validatorSetHash: vsh,
     });
+    // PriceFeed takes the anchor signature, or in two-signature mode anchorSig ‖ roundSig.
+    const feedSig = this.twoSig ? concat(sig, roundSignature(this.d.operator, dep.chainId, dep.rollupId, round, rh)) : sig;
     const tx = await this.d.chain.native.sendOrThrow(this.d.operator, [
       submitBatchMsg({ sequencer: this.d.operator.address, ...plan.input, ...(this.twoSig ? {} : { validatorSetHash: vsh }), anchorSignature: sig }),
     ]);
+
+    // The batch is on chain: record everything that follows from it in one save.
     this.ledger = plan.ledger;
     if (lie) retireEvilMedian(lie);
-    this.batches.push({
-      batchIndex: Number(plan.input.batchIndex),
-      status: "submitted",
-      inboxStart: att.inboxStart,
-      inboxEnd,
-      withdrawals: plan.result.withdrawals,
-    });
-    this.log(`round ${round}: ${result.status}, ${result.leaves.length} reports, batch ${plan.input.batchIndex} (${plan.entries.length} entries) anchored with round hash ${rh.slice(0, 12)}… tx ${tx.txHash}`);
-
-    // PriceFeed takes the anchor signature, or in two-signature mode anchorSig ‖ roundSig.
-    const feedSig = this.twoSig ? concat(sig, roundSignature(this.d.operator, dep.chainId, dep.rollupId, round, rh)) : sig;
-    let relayed: Record<string, unknown>;
-    if (!this.relay) relayed = { status: "skipped", reason: "no PriceFeed or relayer configured" };
-    else if (result.status !== "ok") relayed = { status: "skipped", reason: "no quorum" };
-    else {
-      try {
-        const r = await this.relay.postRound(att, toHex(plan.input.stateRoot), plan.input.txCount, toHex(feedSig));
-        relayed = { status: "posted", hash: r.hash, gasUsed: r.gasUsed };
-        this.log(`round ${round}: relayed to PriceFeed ${JSON.stringify(relayed, big)}`);
-      } catch (err) {
-        relayed = { status: "failed", error: (err as Error).message.split("\n")[0] };
-        this.log(`round ${round}: relay FAILED (${relayed.error}); anyone can relay it later from the round record`);
-      }
-    }
-
-    addInBand(this.state.tally, result);
-    if ((round + 1n) % BigInt(dep.params.rewardEpochRounds) === 0n) await this.payRewards(round);
-
+    this.batches.push({ batchIndex: Number(plan.input.batchIndex), status: "submitted", inboxStart: att.inboxStart, inboxEnd, withdrawals: plan.result.withdrawals });
+    const relayed = !this.relay
+      ? { status: "skipped", reason: "no PriceFeed or relayer configured" }
+      : result.status !== "ok"
+        ? { status: "skipped", reason: "no quorum" }
+        : { status: "pending", attempts: 0 };
     this.d.store.saveRound(round, {
       round,
       result: summary(result),
@@ -238,6 +234,12 @@ export class Operator {
       relayed,
       ...(lie ? { evilMedian: { feedId: lie.feedId, posted: lie.price, honest: honest.medians[honest.feedIds.indexOf(lie.feedId)] } } : {}),
     });
+    addInBand(this.state.tally, result);
+    if ((round + 1n) % BigInt(dep.params.rewardEpochRounds) === 0n) this.state.rewardDue = String(round);
+    if (relayed.status === "pending") this.state.pendingRelays.push(String(round));
+    this.state.lastSettled = String(round);
+    this.d.store.save(this.state);
+    this.log(`round ${round}: ${result.status}, ${result.leaves.length} reports, batch ${plan.input.batchIndex} (${plan.entries.length} entries) anchored with round hash ${rh.slice(0, 12)}… tx ${tx.txHash}`);
   }
 
   /** The demo lie for this round, if one is set and the feed has a median to replace. Logged loudly. */
@@ -252,19 +254,67 @@ export class Operator {
     return lie;
   }
 
+  // ---- relay ----
+
+  private async relayPending(): Promise<void> {
+    const feed = this.d.deployment.contracts.PriceFeed;
+    if (!this.relay || !feed) return;
+    for (const r of [...this.state.pendingRelays]) {
+      const round = BigInt(r);
+      const rec = this.d.store.loadRound(round);
+      const progress = await feedProgress(this.d.chain, feed, round);
+      if (progress.posted) rec.relayed = { ...rec.relayed, status: "posted", note: "PriceFeed already holds this round" };
+      else if (progress.superseded) rec.relayed = { status: "skipped", reason: "a later round is already on PriceFeed" };
+      else {
+        try {
+          const p = await this.relay.postRound(attestationFromRecord(rec.attestation), rec.batch.stateRoot, BigInt(rec.batch.txCount), rec.feedSignature);
+          rec.relayed = { status: "posted", hash: p.hash, gasUsed: p.gasUsed.toString() };
+          this.log(`round ${round}: relayed to PriceFeed (tx ${p.hash}, gas ${p.gasUsed})`);
+        } catch (err) {
+          const attempts = Number(rec.relayed?.attempts ?? 0) + 1;
+          const error = (err as Error).message.split("\n")[0];
+          rec.relayed = { status: attempts >= MAX_RELAY_ATTEMPTS ? "failed" : "pending", attempts, error };
+          this.log(`round ${round}: relay FAILED, attempt ${attempts} of ${MAX_RELAY_ATTEMPTS} (${error})`);
+          this.d.store.saveRound(round, rec);
+          // Rounds must reach PriceFeed in order: stop here until this one is posted or given up.
+          if (rec.relayed.status === "pending") return;
+        }
+      }
+      this.state.pendingRelays = this.state.pendingRelays.filter((x) => x !== r);
+      this.d.store.saveRound(round, rec);
+      this.d.store.save(this.state);
+    }
+  }
+
   // ---- 3. reward ----
 
-  private async payRewards(round: bigint): Promise<void> {
+  private async payRewards(): Promise<void> {
+    if (this.state.rewardDue === undefined) return;
+    const round = this.state.rewardDue;
+    const me = this.headLedger().get(this.ledgerKey.accountId);
+    const done = () => {
+      this.state.tally = {};
+      this.state.rewardDue = undefined;
+      this.state.rewardPosting = undefined;
+      this.d.store.save(this.state);
+    };
+    // A post from an earlier attempt that did land has moved the operator's ledger nonce on.
+    if (this.state.rewardPosting && me.nonce > BigInt(this.state.rewardPosting.nonce)) {
+      this.log(`epoch ending round ${round}: the earlier reward post landed`);
+      return done();
+    }
     const lines = rewardLines(this.state.tally, this.joins, BigInt(this.d.deployment.params.rewardPerReportUqor));
-    this.state.tally = {};
-    if (lines.length === 0) return;
-    const head = this.headLedger();
-    const me = head.get(this.ledgerKey.accountId);
-    const total = lines.reduce((s, l) => s + l.amount, 0n);
+    if (lines.length === 0) return done();
+    const total = lines.reduce((t, l) => t + l.amount, 0n);
     if (me.balance < total) {
+      // Keep the tally: these scouts are paid with the next epoch once the pool is topped up.
       this.log(`epoch ending round ${round}: reward pool holds ${me.balance} uqor, needs ${total}; top it up with a deposit`);
+      this.state.rewardDue = undefined;
+      this.d.store.save(this.state);
       return;
     }
+    this.state.rewardPosting = { round, nonce: me.nonce.toString() };
+    this.d.store.save(this.state);
     const payloads = lines.map((l, i) =>
       encodeQledgerTx(
         signQledgerTx({ ...this.env, secretKey: this.ledgerKey.secretKey, publicKey: this.ledgerKey.publicKey, nonce: me.nonce + BigInt(i), amount: l.amount, to: l.account }),
@@ -272,6 +322,7 @@ export class Operator {
     );
     const tx = await this.d.chain.native.postToInbox(this.d.operator, payloads, this.env.rollupId);
     this.log(`epoch ending round ${round}: paid ${lines.map((l) => `${l.scout} ${l.amount}`).join(", ")} (tx ${tx.txHash})`);
+    done();
   }
 
   /** The ledger including entries posted since the last batch: the base for the next ledger nonce. */

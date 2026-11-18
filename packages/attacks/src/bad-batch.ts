@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BOND, SimCourt } from "./court.js";
 import type { Step } from "./evidence.js";
+import { useDemo } from "@sealed-scouts/scout";
 import { needDeployment } from "./stolen-keys.js";
 
 const A = "bad-batch";
@@ -67,7 +68,7 @@ export async function badBatchLive(opts: { bond?: boolean; demo?: boolean; chain
 
   const tower = await loadAccount("TOWER");
   const watchtower = new Watchtower(
-    towerConfigFrom(d, opts.demo ?? false),
+    towerConfigFrom(d, useDemo(d, opts.demo)),
     source, new FeedWriter(feedDir()), liveChallenger(chain, tower, d.rollupId, d.priceFeed),
   );
   await watchtower.sync();

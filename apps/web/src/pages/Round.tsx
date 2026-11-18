@@ -14,6 +14,8 @@ export function Round({ id, rollupId, priceFeed }: { id: string; rollupId: strin
   const [feedId, setFeedId] = useState(1);
   if (loading && !r) return <Empty>Loading round {id}…</Empty>;
   if (!r) return <Empty>{missing ? `Round ${id} is not in the feed.` : `Could not load round ${id}: ${error}`}</Empty>;
+  // The watchtower publishes a bare {round, verdict: "unknown", error} when it could not read the chain for a round.
+  if (r.verdict === "unknown") return <Empty>Round {id}: the watchtower could not read the chain for this round and will retry. {(r as { error?: string }).error}</Empty>;
 
   const feeds = FEEDS.filter((f) => r.medians.some((m) => m.feedId === f.feedId));
   const median = r.medians.find((m) => m.feedId === feedId)?.price;

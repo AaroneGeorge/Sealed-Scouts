@@ -47,8 +47,11 @@ npm run judge
 
 `npm run judge` reads the rollup from the public testnet, builds the latest batch's settlement receipt, runs the six
 receipt checks, shows that a copy with one changed digit is refused, verifies the same ML-DSA-87 anchor signature
-through `pqcVerify` on the EVM, and checks that the anchor covers the latest price round. It prints PASS, FAIL or
-SKIP per check and finishes in well under two minutes. While a part is not live yet it says SKIP, never PASS.
+through `pqcVerify` on the EVM, and checks that the creator signed the latest price round. For that last part it
+replays the recent rounds itself with the watchtower, so it does not rely on our servers; if that replay cannot
+finish, it says so and names the published feed it read instead. It prints PASS, FAIL or SKIP per check and is
+built to finish in under two minutes (the local replay is capped at 90 s). While a part is not live yet it says
+SKIP, never PASS.
 
 The same receipt checks run on any rollup: `npm run judge -- --rollup vigil-1`.
 

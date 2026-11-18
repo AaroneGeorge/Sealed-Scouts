@@ -11,7 +11,7 @@ export interface Median { feedId: number; price: string; count: number }
 /** PriceFeed's view of a round (Status enum: none, pending, final, corrected). */
 export type FeedStatus = "none" | "pending" | "final" | "corrected";
 
-export type RoundVerdict = "match" | "median-wrong" | "root-wrong" | "corrected" | "not-posted" | "no-quorum";
+export type RoundVerdict = "match" | "median-wrong" | "root-wrong" | "corrected" | "not-posted" | "no-quorum" | "unknown";
 
 export interface TowerStatus {
   updatedAt: string;

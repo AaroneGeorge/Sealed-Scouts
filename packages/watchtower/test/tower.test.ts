@@ -1,10 +1,10 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { checkQledgerFraud } from "@qorechain/rdk";
 import { pqVerify } from "@qorechain/qoresign";
-import { anchorSignBytes, attestationFromJson, fromHex, reportsRoot, roundHash, type Leaf } from "@sealed-scouts/core";
+import { anchorSignBytes, attestationFromJson, encodeMsg, fromHex, reportsRoot, roundHash, roundWindows, type Leaf } from "@sealed-scouts/core";
 import { FeedWriter } from "../src/feed.js";
 import { buildDemoWorld } from "../src/scenario.js";
 import { simTowerConfig, sourceFromJson } from "../src/sim.js";
@@ -127,5 +127,75 @@ describe("eligibility from the source (the operator's rule)", () => {
     const r0 = readJson(join(dir, "rounds", "0.json"));
     expect(r0.rejected).toContainEqual({ scout: banned, reason: "not-eligible" });
     expect(r0.verdict).toBe("root-wrong"); // the feed was posted with five reports; this rule counts four
+  });
+});
+
+describe("one bad round cannot stall the tower", () => {
+  it("a post claiming an old round is ignored: rounds come from heights, not from what a message says", async () => {
+    const { sim: s } = buildDemoWorld();
+    const asked: bigint[] = [];
+    // An attacker posts a REPORT claiming round 0, long after round 0; and one claiming a round before genesis.
+    s.post(s.scouts[0]!.address, [encodeMsg({ kind: "REPORT", round: 0n, envelope: new Uint8Array(32) })]);
+    s.height += 10n;
+    const source = {
+      ...s.asSource(),
+      eligibility: async (round: bigint) => {
+        asked.push(round);
+        return () => true;
+      },
+    };
+    const tower = new Watchtower(simTowerConfig(s.params), source, new FeedWriter(feedDir()), undefined, () => {});
+    await tower.sync();
+    expect(asked).toEqual([0n, 1n, 2n, 3n, 4n, 5n]);
+    expect(tower.status().rounds.replayed).toBe(6);
+    expect(tower.status().batches).toMatchObject({ replayed: 7, fraud: 1 });
+  });
+
+  it("a round whose chain reads fail is published as unknown; other rounds and every batch are still checked", async () => {
+    const { sim: s, wrongMedianRound } = buildDemoWorld();
+    let failing = true;
+    const source = {
+      ...s.asSource(),
+      eligibility: async (round: bigint) => {
+        if (round === 0n && failing) throw new Error("historical eth_call failed: state not available");
+        return () => true;
+      },
+    };
+    const { c, medians, batches } = recordingChallenger();
+    const dir = feedDir();
+    const tower = new Watchtower(simTowerConfig(s.params), source, new FeedWriter(dir), c, () => {});
+    await tower.sync();
+    expect(readJson(join(dir, "rounds", "0.json"))).toMatchObject({ round: "0", verdict: "unknown" });
+    expect(tower.status().rounds).toMatchObject({ unknown: 1, replayed: 5 });
+    expect(medians.map((m) => m.round)).toEqual([wrongMedianRound]);
+    expect(batches).toHaveLength(1);
+    failing = false; // retried next pass
+    await tower.sync();
+    expect(tower.status().rounds).toMatchObject({ unknown: 0, replayed: 6 });
+    expect(readJson(join(dir, "rounds", "0.json")).verdict).toBe("match");
+  });
+});
+
+describe("a round range (what the judge runs)", () => {
+  it("reads only the range's part of the inbox, judges only its rounds, and skips the ledger", async () => {
+    const reads: [bigint, bigint][] = [];
+    const base = sim.asSource();
+    const source = { ...base, readInbox: async (from: bigint, to: bigint) => (reads.push([from, to]), base.readInbox(from, to)) };
+    const dir = feedDir();
+    const tower = new Watchtower({ ...cfg, rounds: { from: 2n, to: 3n }, ledger: false }, source, new FeedWriter(dir), undefined, () => {});
+    await tower.sync();
+    const w2 = roundWindows(2n, sim.params);
+    const w3 = roundWindows(3n, sim.params);
+    const [from, to] = reads[0]!;
+    expect(sim.entries.find((e) => e.seq === from)!.height).toBeGreaterThanOrEqual(w2.start);
+    expect(sim.entries.find((e) => e.seq === from - 1n)!.height).toBeLessThan(w2.start);
+    expect(sim.entries.find((e) => e.seq === to)!.height).toBeLessThan(w3.revealEnd);
+    expect(readdirSync(join(dir, "rounds")).sort()).toEqual(["2.json", "3.json"]);
+    expect(readJson(join(dir, "rounds", "2.json")).verdict).toBe("match");
+    expect(tower.status().batches.replayed).toBe(0);
+  });
+
+  it("refuses a range with the ledger replay on (it would judge batches on a partial inbox)", () => {
+    expect(() => new Watchtower({ ...cfg, rounds: { from: 0n, to: 1n } }, sim.asSource(), new FeedWriter(feedDir()))).toThrow(/ledger/);
   });
 });

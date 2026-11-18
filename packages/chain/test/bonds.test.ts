@@ -32,7 +32,7 @@ describe("scout eligibility", () => {
       [toEvmAddress(B)]: [10n ** 18n, 1_700_000_300n, 1n], // exit pending
     });
     const e = new ScoutEligibility(c as never, [A, B, C], FEED);
-    await e.snapshot(7n, 12_345n);
+    expect((await e.snapshot(7n, 12_345n)).status).toBe("ok");
     expect(c.blocks).toEqual([12_345n, 12_345n, 12_345n]);
     expect([A, B, C, "qor1unlisted"].map((s) => e.eligible(s, 7n))).toEqual([true, false, false, false]);
   });
@@ -41,6 +41,13 @@ describe("scout eligibility", () => {
     const e = new ScoutEligibility(client({}) as never, [A, B], undefined);
     await e.snapshot(1n, 10n);
     expect([e.eligible(A, 1n), e.eligible(C, 1n)]).toEqual([true, false]);
+  });
+
+  it("a failed historical read gives a typed unknown result and keeps no snapshot", async () => {
+    const failing = { readContract: async () => { throw new Error("header not found"); } };
+    const e = new ScoutEligibility(failing as never, [A], FEED);
+    expect(await e.snapshot(4n, 1n)).toEqual({ status: "unknown", reason: expect.stringMatching(/header not found/) });
+    expect(() => e.eligible(A, 4n)).toThrow(/no eligibility snapshot/);
   });
 
   it("a round without a snapshot is an error, not an empty set", async () => {

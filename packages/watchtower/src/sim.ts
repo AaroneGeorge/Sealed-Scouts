@@ -140,6 +140,7 @@ export class SimRollup {
       height: async () => this.height,
       inboxHead: async () => BigInt(this.entries.length),
       readInbox: async (from, to) => this.entries.filter((e) => e.seq >= from && e.seq <= to),
+      firstSeqAtOrAfter: async (h) => firstSeqAtOrAfter(this.entries, h),
       batches: async (from) => this.batches.filter((b) => b.batchIndex >= from).map((b) => ({ ...b })),
       pqKey: async (s) => this.pqKeys.get(s),
       feedRound: async (r) => this.feedRounds.get(r) ?? { status: "none", feedIds: [], medians: [], counts: [], reportsRoot: `0x${"00".repeat(32)}`, reportCount: 0, batchIndex: 0n },
@@ -158,6 +159,9 @@ export class SimRollup {
     });
   }
 }
+
+const firstSeqAtOrAfter = (entries: InboxEntry[], h: bigint): bigint =>
+  entries.find((e) => e.height >= h)?.seq ?? BigInt(entries.length + 1);
 
 const toQ = (e: InboxEntry): QledgerEntry => ({ height: e.height, poster: e.poster, payload: e.payload });
 
@@ -183,6 +187,7 @@ export function sourceFromJson(j: Record<string, any>): { params: Omit<RoundPara
       height: async () => BigInt(j.height),
       inboxHead: async () => BigInt(entries.length),
       readInbox: async (from, to) => entries.filter((e) => e.seq >= from && e.seq <= to),
+      firstSeqAtOrAfter: async (h) => firstSeqAtOrAfter(entries, h),
       batches: async (from) => (j.batches as BatchInfo[]).filter((b) => b.batchIndex >= from),
       pqKey: async (s) => (j.pqKeys[s] ? fromHex(j.pqKeys[s]) : undefined),
       feedRound: async (r) => feed.get(r.toString()),

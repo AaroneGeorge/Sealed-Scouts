@@ -1,5 +1,5 @@
 {
- "updatedAt": "2026-11-18T20:27:38.120Z",
+ "updatedAt": "2026-11-18T20:40:47.023Z",
  "mode": "observe",
  "rollupId": "sealed-scouts-sim",
  "chainHeight": "2760",
@@ -12,6 +12,7 @@
   "rootWrong": 0,
   "notPosted": 0,
   "noQuorum": 0,
+  "unknown": 0,
   "latest": "5"
  },
  "batches": {
@@ -72,13 +73,13 @@
   {
    "kind": "median",
    "target": "round 4",
-   "at": "2026-11-18T20:27:37.844Z",
+   "at": "2026-11-18T20:40:46.759Z",
    "sent": false
   },
   {
    "kind": "batch",
    "target": "batch 3",
-   "at": "2026-11-18T20:27:38.120Z",
+   "at": "2026-11-18T20:40:47.023Z",
    "sent": false
   }
  ],

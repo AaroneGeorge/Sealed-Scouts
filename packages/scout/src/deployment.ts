@@ -19,6 +19,8 @@ export interface Deployment {
   /** qor1 accounts eligible to report. */
   scouts: string[];
   priceFeed?: `0x${string}`;
+  /** Which timing the operator runs ("roundMode", written when it starts). */
+  roundMode?: "demo" | "normal";
 }
 
 type J = Record<string, any>;
@@ -55,6 +57,7 @@ export function parseDeployment(j: J): Deployment {
     },
     scouts: j.scouts ?? [],
     priceFeed: j.contracts?.PriceFeed ?? j.priceFeed,
+    roundMode: j.roundMode === "demo" || j.roundMode === "normal" ? j.roundMode : undefined,
   };
 }
 
@@ -63,8 +66,15 @@ export function timingOf(d: Deployment, demo: boolean): RoundTiming {
   return demo ? (d.demoTiming ?? d.timing) : d.timing;
 }
 
-/** Demo rounds are on with --demo or SS_DEMO=1. */
-export const demoFromEnv = (env: NodeJS.ProcessEnv = process.env): boolean => env.SS_DEMO === "1" || env.SS_DEMO === "true";
+/**
+ * Demo rounds or normal ones: the --demo flag if given, else SS_DEMO if set ("1"/"true" or "0"/"false"), else the
+ * operator's own choice in the deployment ("roundMode"), so a replayer follows the operator by default.
+ */
+export function useDemo(d: Deployment | undefined, flag?: boolean, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (flag !== undefined) return flag;
+  if (env.SS_DEMO !== undefined && env.SS_DEMO !== "") return env.SS_DEMO === "1" || env.SS_DEMO === "true";
+  return d?.roundMode === "demo";
+}
 
 /** The deployment, or undefined before the rollup exists. */
 export function loadDeployment(path = process.env.SS_DEPLOYMENT ?? DEFAULT_DEPLOYMENT_PATH): Deployment | undefined {

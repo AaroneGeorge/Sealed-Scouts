@@ -9,6 +9,8 @@ export interface TowerSource {
   inboxHead(): Promise<bigint>;
   /** Inbox posts fromSeq..toSeq, both included. */
   readInbox(fromSeq: bigint, toSeq: bigint): Promise<InboxEntry[]>;
+  /** The first inbox sequence posted at or after `height`, or head + 1 when there is none yet. */
+  firstSeqAtOrAfter(height: bigint): Promise<bigint>;
   /** Settlement batches from index `fromIndex` on. */
   batches(fromIndex: number): Promise<BatchInfo[]>;
   /** The scout's registered ML-DSA-87 key, or undefined when it has none. */
@@ -17,7 +19,8 @@ export interface TowerSource {
   feedRound(round: bigint): Promise<FeedRound | undefined>;
   /**
    * Who may report in `round`, read as of its close height (the operator's rule). Without it the tower uses
-   * TowerConfig.scouts, or every poster with a registered key (fixture mode).
+   * TowerConfig.scouts, or every poster with a registered key (fixture mode). Throws when it cannot be read; the
+   * tower then marks that round "unknown" and carries on.
    */
   eligibility?(round: bigint, closeHeight: bigint): Promise<(scout: string, round: bigint) => boolean>;
 }

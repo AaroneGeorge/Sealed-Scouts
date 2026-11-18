@@ -49,7 +49,17 @@ curl -s http://127.0.0.1:8790/health                       # API up, feed age
 ```
 
 `judge` exits 0 when every check passes, 1 when one fails, 3 when something is not live yet. Once deployments exist,
-it replays the rounds itself with the watchtower in observe mode, so it does not trust our feed.
+it replays the rounds around the checked batch itself, with the watchtower in observe mode, so the price-round checks
+do not trust our feed. The replay is capped at 90 s. If it cannot finish, the judge prints a warning, reads the
+published feed (`demoUrl` in the deployments file) and marks each price-round line "(from the published feed)".
+`--feed-url` or `--feed-dir` skips the replay on purpose.
+
+### Round timing: normal or demo
+
+Every replayer must cut rounds at the same heights as the operator. The operator records its choice as
+`"roundMode": "demo" | "normal"` in `deployments/diana.json`. The watchtower, the scouts and `judge` follow it by
+default; `SS_DEMO=1` (or `0`) overrides it, and `--demo` / `--no-demo` overrides both. The hosted container passes
+`--demo` to its watchtower when `roundMode` is `demo`.
 
 ## Evidence files and PROOF.md
 

@@ -1,7 +1,7 @@
 // The watchtower on the live chain: inbox and batches over REST, PriceFeed over read-only EVM calls.
 // Only active mode needs a key (TOWER), to send challenges.
 import { fetchPqKeyStatus } from "@qorechain/qoresign/network";
-import { challengeBatchMsg } from "@qorechain/rdk";
+import { challengeBatchMsg, isRestNotFound } from "@qorechain/rdk";
 import { toHex, type Leaf } from "@sealed-scouts/core";
 import { ScoutEligibility, type Account, type Chain } from "@sealed-scouts/chain";
 import { timingOf, type Deployment } from "@sealed-scouts/scout";
@@ -58,7 +58,9 @@ export function liveSource(chain: Chain, d: Pick<Deployment, "rollupId" | "scout
   return {
     eligibility: async (round, closeHeight) => {
       if (!snapshotted.has(round)) {
-        await eligibility.snapshot(round, closeHeight);
+        const snap = await eligibility.snapshot(round, closeHeight);
+        // The tower publishes the round as "unknown" with this reason and tries again next pass.
+        if (snap.status === "unknown") throw new Error(`eligibility unknown at height ${closeHeight}: ${snap.reason}`);
         snapshotted.add(round);
       }
       return eligibility.eligible;
@@ -66,6 +68,19 @@ export function liveSource(chain: Chain, d: Pick<Deployment, "rollupId" | "scout
     height: async () => BigInt(await rest.getLatestHeight()),
     inboxHead: () => chain.inbox.head(rollupId),
     readInbox: (from, to) => chain.inbox.read(rollupId, from, to),
+    // Binary search on post heights. A post the chain no longer retains is older than any it keeps, so it
+    // counts as "before" the height we look for.
+    firstSeqAtOrAfter: async (height) => {
+      let lo = 1n;
+      let hi = BigInt((await rest.getInbox(rollupId)).headSequence) + 1n;
+      while (lo < hi) {
+        const mid = (lo + hi) / 2n;
+        const h = await rest.getPostedData(rollupId, mid).then((p) => BigInt(p.height), (e) => (isRestNotFound(e) ? -1n : Promise.reject(e)));
+        if (h >= height) hi = mid;
+        else lo = mid + 1n;
+      }
+      return lo;
+    },
     batches: async (fromIndex) =>
       (await rest.listBatches(rollupId, { startIndex: fromIndex })).map(
         (b): BatchInfo => ({

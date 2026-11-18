@@ -1,7 +1,7 @@
 // The operator itself lies: it posts a round whose fETH median is $1. The anchor signature is real, so PriceFeed
 // accepts the round as Pending. The watchtower replays the round from inbox data, sees a different median and
 // challenges; the court recomputes the median from the committed reports, corrects the price and slashes.
-import { formatE8 } from "@sealed-scouts/scout";
+import { formatE8, useDemo } from "@sealed-scouts/scout";
 import {
   FeedWriter, PRICE_FEED_ABI, Watchtower, buildDemoWorld, derive, feedRoundFor, liveChallenger, liveSource, simTowerConfig, towerConfigFrom,
 } from "@sealed-scouts/watchtower";
@@ -58,7 +58,7 @@ export async function evilMedianLive(opts: { timeoutMs?: number; demo?: boolean;
   if (!d.priceFeed) throw new Error("no PriceFeed address in the deployment");
   const tower = await loadAccount("TOWER");
   const watchtower = new Watchtower(
-    towerConfigFrom(d, opts.demo ?? false),
+    towerConfigFrom(d, useDemo(d, opts.demo)),
     liveSource(chain, d), new FeedWriter(mkdtempSync(join(tmpdir(), "ss-evil-"))), liveChallenger(chain, tower, d.rollupId, d.priceFeed),
   );
   const deadline = Date.now() + (opts.timeoutMs ?? 30 * 60_000);

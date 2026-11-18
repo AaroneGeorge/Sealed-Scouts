@@ -2,12 +2,14 @@
 //   npm run watchtower -- --observe [--once]                  replay the live rollup with no key, write the feed
 //   npm run watchtower -- --observe --fixture demo --once     same, on the simulated demo history (or a recorded JSON file)
 //   npm run watchtower -- --active                            also challenge (needs SS_TOWER_MNEMONIC)
-//   --demo (or SS_DEMO=1): demo round timing, as the operator runs it
+//   --demo / --no-demo: round timing; default SS_DEMO, else the operator's "roundMode" in deployments/diana.json
+//   --rounds A..B: judge only rounds A to B (reads only their part of the inbox; needs --no-ledger)
+//   --no-ledger: skip the ledger batch replay (it needs the whole inbox)
 //   --feed-dir <dir> (default repo/feed, or SS_FEED_DIR)   --interval-ms <ms> (default 15000)
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { chain as defaultChain, loadAccount } from "@sealed-scouts/chain";
-import { demoFromEnv, loadDeployment } from "@sealed-scouts/scout";
+import { loadDeployment, useDemo } from "@sealed-scouts/scout";
 import { DEFAULT_FEED_DIR, FeedWriter } from "./feed.js";
 import { liveChallenger, liveSource, towerConfigFrom } from "./live.js";
 import { buildDemoWorld } from "./scenario.js";
@@ -16,12 +18,15 @@ import type { Challenger, TowerSource } from "./source.js";
 import { Watchtower, type TowerConfig } from "./tower.js";
 
 const { values } = parseArgs({
+  allowNegative: true,
   options: {
     observe: { type: "boolean", default: false },
-    demo: { type: "boolean", default: demoFromEnv() },
+    demo: { type: "boolean" },
     active: { type: "boolean", default: false },
     fixture: { type: "string" },
     once: { type: "boolean", default: false },
+    rounds: { type: "string" },
+    ledger: { type: "boolean", default: true },
     "feed-dir": { type: "string", default: process.env.SS_FEED_DIR ?? DEFAULT_FEED_DIR },
     "interval-ms": { type: "string", default: "15000" },
   },
@@ -40,10 +45,14 @@ if (fixture) {
 } else {
   const d = loadDeployment();
   if (!d) throw new Error("deployments/diana.json is missing: the rollup is not launched yet (try --fixture)");
-  cfg = towerConfigFrom(d, values.demo!);
+  cfg = towerConfigFrom(d, useDemo(d, values.demo));
   source = liveSource(defaultChain(), d);
   if (values.active) challenger = liveChallenger(defaultChain(), await loadAccount("TOWER"), d.rollupId, d.priceFeed);
 }
+
+const range = values.rounds?.match(/^(\d+)\.\.(\d+)$/);
+if (values.rounds && (!range || BigInt(range[1]!) > BigInt(range[2]!))) throw new Error(`--rounds takes A..B with A <= B, got ${values.rounds}`);
+cfg = { ...cfg, ledger: values.ledger, ...(range ? { rounds: { from: BigInt(range[1]!), to: BigInt(range[2]!) } } : {}) };
 
 const tower = new Watchtower(cfg, source, new FeedWriter(values["feed-dir"]!), challenger);
 console.log(`watchtower (${tower.mode}) on ${cfg.params.rollupId}${fixture ? ` [fixture: ${fixture}]` : ""}, feed in ${values["feed-dir"]}`);

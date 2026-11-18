@@ -18,7 +18,7 @@ export function displayStatus(feedStatus: string | null | undefined, verdict: Ro
 }
 
 export const roundStatus = (r: TowerRound): DisplayStatus =>
-  displayStatus(r.feed?.status, r.verdict, r.leaves.length > 0 || r.reports.length === 0);
+  displayStatus(r.feed?.status, r.verdict, (r.leaves?.length ?? 0) > 0 || (r.reports?.length ?? 0) === 0);
 
 /** One line on what the watchtower concluded, and whether it is good news. */
 export const VERDICT: Record<RoundVerdict, { text: string; tone: "pass" | "fail" | "sealed" | "wait" }> = {
@@ -28,6 +28,7 @@ export const VERDICT: Record<RoundVerdict, { text: string; tone: "pass" | "fail"
   corrected: { text: "corrected by the court", tone: "sealed" },
   "not-posted": { text: "derived, not posted yet", tone: "wait" },
   "no-quorum": { text: "too few valid reports", tone: "wait" },
+  unknown: { text: "chain read failed: will retry", tone: "wait" },
 };
 
 /** Latest settled medians per feed: newest round that is final or corrected and that replay agrees with. */

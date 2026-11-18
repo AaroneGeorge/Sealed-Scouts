@@ -5,5 +5,21 @@
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "scripts": { "test": "vitest run --passWithNoTests", "typecheck": "tsc --noEmit -p ." }
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit -p .",
+    "launch": "tsx src/launch.ts",
+    "loop": "tsx src/loop.ts",
+    "receipt": "tsx src/receipt.ts"
+  },
+  "dependencies": {
+    "@qorechain/pqc": "0.2.3",
+    "@qorechain/qoreseal": "0.1.0",
+    "@qorechain/rdk": "0.9.0",
+    "@qorechain/sdk": "0.14.0",
+    "@sealed-scouts/chain": "*",
+    "@sealed-scouts/core": "*",
+    "@sealed-scouts/scout": "*",
+    "viem": "2.58.0"
+  }
 }

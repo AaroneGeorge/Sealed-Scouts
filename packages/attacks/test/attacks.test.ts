@@ -1,8 +1,12 @@
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildDemoWorld, derive, feedRoundFor } from "@sealed-scouts/watchtower";
 import { badBatchDryRun } from "../src/bad-batch.js";
 import { BOND, CourtRevert, SimCourt } from "../src/court.js";
 import { evilMedianDryRun } from "../src/evil-median.js";
+import { recordClaims, type Step } from "../src/evidence.js";
 import { stolenKeysDryRun } from "../src/stolen-keys.js";
 
 const refusedAll = (steps: { verdict: string }[]) => steps.filter((s) => s.verdict !== "ACCEPTED").every((s) => s.verdict === "REFUSED");
@@ -47,5 +51,23 @@ describe("SimCourt follows the PriceFeed rules", () => {
     sim.feedRounds.set(5n, feedRoundFor(derive(sim, 5n), "pending"));
     await expect(court.challengeMedian(5n, derive(sim, 5n).leaves)).rejects.toThrow(/HonestRound/);
     expect(court.bonds.get(sim.operator.address)).toBe(BOND);
+  });
+});
+
+describe("recordClaims", () => {
+  const step = (verdict: Step["verdict"], tx?: string): Step => ({
+    attack: "bad-batch", step: "challenge", verdict, where: "chain", evidence: tx ? { challengeTx: tx } : {},
+    claim: { id: "chain-fraud-slash", layer: "native", txKey: "challengeTx" },
+  });
+
+  it("merges refused steps with a tx into claims.json and keeps other claims", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "ss-claims-")), "evidence", "claims.json");
+    expect(recordClaims([step("REFUSED", "")], path)).toEqual([]);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify({ claims: { "rollup-created": { tx: "AA", layer: "native" } } }));
+    expect(recordClaims([step("NOT REFUSED", "BB"), step("REFUSED", "CC")], path)).toEqual(["chain-fraud-slash"]);
+    const file = JSON.parse(readFileSync(path, "utf8"));
+    expect(file.claims["rollup-created"]).toEqual({ tx: "AA", layer: "native" });
+    expect(file.claims["chain-fraud-slash"]).toMatchObject({ tx: "CC", layer: "native", note: "bad-batch: challenge" });
   });
 });

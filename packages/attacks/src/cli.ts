@@ -7,7 +7,7 @@
 import { parseArgs } from "node:util";
 import { badBatchDryRun, badBatchLive } from "./bad-batch.js";
 import { evilMedianDryRun, evilMedianLive } from "./evil-median.js";
-import { printSteps, saveEvidence, type Step } from "./evidence.js";
+import { printSteps, recordClaims, saveEvidence, type Step } from "./evidence.js";
 import { stolenKeysDryRun, stolenKeysLive } from "./stolen-keys.js";
 
 const { values, positionals } = parseArgs({
@@ -32,7 +32,9 @@ for (const n of run) {
   try {
     const steps = await ATTACKS[n]!();
     printSteps(steps);
-    console.log(`  evidence: ${saveEvidence(n, steps, dry)}\n`);
+    console.log(`  evidence: ${saveEvidence(n, steps, dry)}`);
+    const claims = dry ? [] : recordClaims(steps);
+    console.log(claims.length ? `  claims.json: ${claims.join(", ")}\n` : "");
     all.push(...steps);
   } catch (e) {
     console.log(`ERROR       ${n}: ${(e as Error).message}\n`);

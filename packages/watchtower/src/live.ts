@@ -2,16 +2,45 @@
 // Only active mode needs a key (TOWER), to send challenges.
 import { fetchPqKeyStatus } from "@qorechain/qoresign/network";
 import { challengeBatchMsg } from "@qorechain/rdk";
-import { toHex, type Leaf } from "@sealed-scouts/core";
+import { toHex, type Leaf, type RoundAttestation } from "@sealed-scouts/core";
 import type { Account, Chain } from "@sealed-scouts/chain";
+import type { Deployment } from "@sealed-scouts/scout";
 import { FEED_STATUS, PRICE_FEED_ABI } from "./abi.js";
 import type { BatchInfo } from "./ledger.js";
 import type { FeedRound } from "./rounds.js";
 import type { Challenger, TowerSource } from "./source.js";
+import type { TowerConfig } from "./tower.js";
+
+export function towerConfigFrom(d: Deployment): TowerConfig {
+  return { params: { ...d.timing, ...d.rules, chainId: d.chainId, rollupId: d.rollupId, operator: d.operator }, scouts: d.scouts, evmChainId: BigInt(d.evmChainId) };
+}
+
+/** How far back to look for a round's RoundPosted event, in EVM blocks per query and in total. */
+const LOG_CHUNK = 10_000n;
+const LOG_LOOKBACK = 400_000n;
 
 export function liveSource(chain: Chain, rollupId: string, priceFeed?: `0x${string}`): TowerSource {
   const rest = chain.inbox.rest;
   const pc = chain.evm.publicClient;
+  const posted = new Map<bigint, RoundAttestation>();
+
+  /** The attestation as posted, from the RoundPosted event (storage keeps only part of it). Newest blocks first. */
+  async function postedAttestation(round: bigint): Promise<RoundAttestation | undefined> {
+    if (posted.has(round)) return posted.get(round);
+    const latest = await pc.getBlockNumber();
+    for (let to = latest; to >= 0n && latest - to < LOG_LOOKBACK; to -= LOG_CHUNK) {
+      const from = to >= LOG_CHUNK ? to - LOG_CHUNK + 1n : 0n;
+      const logs = await pc.getContractEvents({ address: priceFeed!, abi: PRICE_FEED_ABI, eventName: "RoundPosted", args: { round }, fromBlock: from, toBlock: to });
+      const a = logs.at(-1)?.args.att;
+      if (a) {
+        const att: RoundAttestation = { ...a, feedIds: [...a.feedIds], medians: [...a.medians], counts: [...a.counts] };
+        posted.set(round, att);
+        return att;
+      }
+      if (from === 0n) break;
+    }
+    return undefined;
+  }
   const read = <T>(functionName: string, args: unknown[]) =>
     pc.readContract({ address: priceFeed!, abi: PRICE_FEED_ABI, functionName: functionName as never, args: args as never }) as Promise<T>;
 
@@ -38,7 +67,8 @@ export function liveSource(chain: Chain, rollupId: string, priceFeed?: `0x${stri
       const [reportsRoot, , , batchIndex, reportCount] = await read<[`0x${string}`, bigint, bigint, bigint, number, boolean]>("rounds", [round]);
       const feedIds = (await read<readonly number[]>("roundFeeds", [round])).map(Number);
       const points = await Promise.all(feedIds.map((f) => read<[bigint, number, boolean]>("points", [round, f])));
-      return { ...empty, feedIds, medians: points.map((p) => p[0]), counts: points.map((p) => Number(p[1])), reportsRoot, reportCount: Number(reportCount), batchIndex };
+      const attestation = await postedAttestation(round);
+      return { ...empty, feedIds, medians: points.map((p) => p[0]), counts: points.map((p) => Number(p[1])), reportsRoot, reportCount: Number(reportCount), batchIndex, attestation };
     },
   };
 }

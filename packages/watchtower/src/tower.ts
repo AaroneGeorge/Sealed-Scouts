@@ -1,6 +1,6 @@
 // The watchtower: replays every round and every ledger batch from chain data, publishes what it finds, and in
 // active mode challenges a wrong median (EVM court) or a wrong ledger root (chain fraud proof).
-import { decodeMsg, roundWindows, type InboxEntry, type RoundParams } from "@sealed-scouts/core";
+import { decodeMsg, roundHash, roundWindows, type InboxEntry, type RoundParams } from "@sealed-scouts/core";
 import type { FeedWriter } from "./feed.js";
 import { LedgerReplay, type BatchCheck } from "./ledger.js";
 import { checkRound, type RoundCheck } from "./rounds.js";
@@ -10,6 +10,8 @@ export interface TowerConfig {
   params: Omit<RoundParams, "pqKeyOf">;
   /** qor1 accounts allowed to report. Empty = every poster with a registered key (no eligibility list yet). */
   scouts: string[];
+  /** EVM chain id: the round hash domain (9800 on testnet). */
+  evmChainId: bigint;
 }
 
 /** A challenge the tower sent, or in observe mode would have sent (`sent: false`). */
@@ -78,7 +80,7 @@ export class Watchtower {
       if (check.verdict === "median-wrong" && check.feed?.status === "pending") {
         await this.act("median", `round ${round}`, () => this.challenger!.challengeMedian(round, check.derived.leaves));
       }
-      this.feed.round(round, roundJson(check, this.challenges.filter((c) => c.target === `round ${round}`)));
+      this.feed.round(round, roundJson(check, this.challenges.filter((c) => c.target === `round ${round}`), { chainId: this.cfg.evmChainId, rollupId: params.rollupId }));
     }
   }
 
@@ -159,8 +161,9 @@ export class Watchtower {
   }
 }
 
-function roundJson(c: RoundCheck, challenges: Challenge[]) {
+function roundJson(c: RoundCheck, challenges: Challenge[], domain: Parameters<typeof roundHash>[1]) {
   const d = c.derived;
+  const { attestation, ...feed } = c.feed ?? {};
   return {
     round: c.round,
     verdict: c.verdict,
@@ -175,7 +178,9 @@ function roundJson(c: RoundCheck, challenges: Challenge[]) {
     inBand: d.inBand.map((l) => l.scout),
     rejected: d.rejected,
     operator: { openPosted: c.openPosted, leftOut: c.leftOut },
-    feed: c.feed ?? null,
+    feed: c.feed ? feed : null,
     challenges,
+    // What the operator posted and the anchor of batch `attestation.batchIndex` signs (validator_set_hash slot).
+    ...(attestation ? { attestation, roundHash: roundHash(attestation, domain) } : {}),
   };
 }

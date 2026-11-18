@@ -2,7 +2,7 @@
 // RDK's qledger code, builds the fraud proof, and the chain re-runs it: the batch is rejected and the bond slashed.
 import { bondRollupSubmitterMsg, bytesToHex, planQledgerBatch, submitBatchMsg } from "@qorechain/rdk";
 import { chain as defaultChain, loadAccount, type Chain } from "@sealed-scouts/chain";
-import { FeedWriter, LedgerReplay, SimRollup, Watchtower, liveChallenger, liveSource } from "@sealed-scouts/watchtower";
+import { FeedWriter, LedgerReplay, SimRollup, Watchtower, liveChallenger, liveSource, simTowerConfig, towerConfigFrom } from "@sealed-scouts/watchtower";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,7 +26,7 @@ export async function badBatchDryRun(): Promise<Step[]> {
     { attack: A, step: `bonded submitter posts batch ${bad.batchIndex} with a wrong state root`, verdict: "ACCEPTED", where: "simulation", evidence: { stateRoot: bad.stateRoot.slice(0, 18) } },
   ];
   const proof = new LedgerReplay(sim.env).replay(sim.batches, sim.entries).find((b) => b.verdict === "fraud")!.proof!;
-  const tower = new Watchtower({ params: sim.params, scouts: [] }, sim.asSource(), new FeedWriter(feedDir()), court, () => {});
+  const tower = new Watchtower(simTowerConfig(sim.params), sim.asSource(), new FeedWriter(feedDir()), court, () => {});
   await tower.sync();
   const c = tower.challenges.find((x) => x.kind === "batch");
   steps.push({
@@ -67,7 +67,7 @@ export async function badBatchLive(opts: { bond?: boolean; chain?: Chain } = {})
 
   const tower = await loadAccount("TOWER");
   const watchtower = new Watchtower(
-    { params: { ...d.timing, ...d.rules, chainId: d.chainId, rollupId: d.rollupId, operator: d.operator }, scouts: d.scouts },
+    towerConfigFrom(d),
     source, new FeedWriter(feedDir()), liveChallenger(chain, tower, d.rollupId, d.priceFeed),
   );
   await watchtower.sync();
@@ -76,6 +76,7 @@ export async function badBatchLive(opts: { bond?: boolean; chain?: Chain } = {})
   const bondAfter = (await rest.getSubmitterBond(d.rollupId, rogue.address)).amount;
   steps.push({
     attack: A, step: "watchtower sends MsgChallengeBatch with the qledger fraud proof", verdict: after.status === "rejected" ? "REFUSED" : "NOT REFUSED", where: "chain",
+    claim: { id: "chain-fraud-slash", layer: "native", txKey: "challengeTx" },
     evidence: { challengeTx: c?.txHash ?? "none", code: c?.code ?? -1, batchStatus: after.status, rogueBondLeft: bondAfter, ...(c?.error ? { error: c.error } : {}) },
   });
   return steps;

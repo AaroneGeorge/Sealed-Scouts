@@ -3,16 +3,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { checkQledgerFraud } from "@qorechain/rdk";
-import { reportsRoot, type Leaf } from "@sealed-scouts/core";
+import { attestationFromJson, reportsRoot, roundHash, type Leaf } from "@sealed-scouts/core";
 import { FeedWriter } from "../src/feed.js";
 import { buildDemoWorld } from "../src/scenario.js";
-import { sourceFromJson } from "../src/sim.js";
+import { simTowerConfig, sourceFromJson } from "../src/sim.js";
 import type { Challenger } from "../src/source.js";
 import { Watchtower } from "../src/tower.js";
 
 const world = buildDemoWorld();
 const { sim } = world;
-const cfg = { params: sim.params, scouts: [] };
+const cfg = simTowerConfig(sim.params);
 
 function recordingChallenger() {
   const medians: { round: bigint; leaves: Leaf[] }[] = [];
@@ -35,7 +35,7 @@ describe("Watchtower on the simulated demo history", () => {
     const status = readJson(join(dir, "status.json"));
     expect(status.mode).toBe("observe");
     expect(status.rounds).toMatchObject({ replayed: 6, match: 5, medianWrong: 1, rootWrong: 0 });
-    expect(status.batches).toMatchObject({ replayed: 3, ok: 2, fraud: 1 });
+    expect(status.batches).toMatchObject({ replayed: 7, ok: 6, fraud: 1 });
     expect(status.operatorOmissions).toBe(1);
     expect(status.challenges.every((c: { sent: boolean }) => !c.sent)).toBe(true);
 
@@ -46,6 +46,26 @@ describe("Watchtower on the simulated demo history", () => {
     expect(r2.reports[0].reportBytes).toBeGreaterThan(1_700);
     const r3 = readJson(join(dir, "rounds", "3.json"));
     expect(r3.outliers).toHaveLength(1);
+  });
+
+  it("each round file carries the posted attestation and the round hash the anchor signs", async () => {
+    const dir = feedDir();
+    await new Watchtower(cfg, sim.asSource(), new FeedWriter(dir), undefined, () => {}).sync();
+    for (let round = 0n; round < 6n; round++) {
+      const f = readJson(join(dir, "rounds", `${round}.json`));
+      const posted = sim.feedRounds.get(round)!.attestation!;
+      expect(attestationFromJson(f.attestation)).toEqual(posted);
+      expect(f.roundHash).toBe(roundHash(posted, { chainId: 9800n, rollupId: sim.params.rollupId }));
+      expect(f.attestation.batchIndex).toBe(f.feed.batchIndex);
+      expect(f.feed.attestation).toBeUndefined();
+      const b = sim.batches[Number(posted.batchIndex)]!;
+      expect([BigInt(b.inboxStart), BigInt(b.inboxEnd), b.status]).toEqual([posted.inboxStart, posted.inboxEnd, "submitted"]);
+      if (round > 0n) expect(posted.batchIndex).toBeGreaterThan(sim.feedRounds.get(round - 1n)!.batchIndex); // one round per batch
+    }
+    // The lying round's file shows the $1 the operator signed, next to the replayed median.
+    const evil = readJson(join(dir, "rounds", `${world.wrongMedianRound}.json`));
+    expect(evil.attestation.medians[0]).toBe("100000000");
+    expect(evil.medians[0].price).not.toBe("100000000");
   });
 
   it("active mode: challenges the wrong median with leaves that hash to the posted root, once", async () => {
@@ -70,10 +90,11 @@ describe("Watchtower on the simulated demo history", () => {
 
   it("a recorded simulation (JSON) gives the same verdicts as the live object", async () => {
     const recorded = sourceFromJson(JSON.parse(JSON.stringify(sim.toJSON())));
-    const tower = new Watchtower({ params: recorded.params, scouts: [] }, recorded.source, new FeedWriter(feedDir()), undefined, () => {});
+    const tower = new Watchtower(simTowerConfig(recorded.params), recorded.source, new FeedWriter(feedDir()), undefined, () => {});
     await tower.sync();
     expect(tower.status().rounds).toMatchObject({ match: 5, medianWrong: 1 });
     expect(tower.status().batches).toMatchObject({ fraud: 1 });
+    expect(await recorded.source.feedRound(1n)).toEqual(sim.feedRounds.get(1n));
   });
 
   it("ignores rounds whose reveal window is still open", async () => {

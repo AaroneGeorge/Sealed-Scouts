@@ -9,12 +9,13 @@ import {
   qledgerKeypairFromSeed, signQledgerTx, type QledgerEntry,
 } from "@qorechain/rdk";
 import {
-  DEFAULT_RULES, encodeMsg, entryFromJson, fromHex, jsonify, qorAddress, roundWindows, toHex, type InboxEntry, type Json, type RoundParams,
+  DEFAULT_RULES, attestationFromJson, encodeMsg, entryFromJson, fromHex, jsonify, qorAddress, roundWindows, toHex, type InboxEntry, type Json, type RoundParams,
 } from "@sealed-scouts/core";
 import { buildReveal, buildSealedReport, type SealedReport } from "@sealed-scouts/scout";
 import type { BatchInfo } from "./ledger.js";
 import type { FeedRound } from "./rounds.js";
 import type { TowerSource } from "./source.js";
+import type { TowerConfig } from "./tower.js";
 
 const seed = (label: string) => new Uint8Array(createHash("sha256").update(`sealed-scouts/test-seed/${label}`).digest());
 
@@ -24,6 +25,9 @@ export function simIdentity(label: string): SimIdentity {
   const pq = pqKeyFromSeed(seed(`${label}/mldsa87`));
   return { label, address: qorAddress(seed(`${label}/address`).slice(0, 20)), keys: { pqc: { publicKey: pq.publicKey, secretKey: pq.secretKey } } };
 }
+
+/** Tower settings for a simulation: no eligibility list, testnet EVM chain id. */
+export const simTowerConfig = (params: TowerConfig["params"]): TowerConfig => ({ params, scouts: [], evmChainId: 9800n });
 
 export const SIM_TIMING = { genesisHeight: 1000n, roundBlocks: 300n, commitBlocks: 180n, openBlocks: 40n, revealBlocks: 40n };
 
@@ -166,7 +170,7 @@ export function sourceFromJson(j: Record<string, any>): { params: Omit<RoundPara
   };
   const entries: InboxEntry[] = j.entries.map(entryFromJson);
   const feed = new Map<string, FeedRound>(
-    Object.entries(j.feedRounds as Record<string, any>).map(([r, f]) => [r, { ...f, medians: f.medians.map(BigInt), batchIndex: BigInt(f.batchIndex) }]),
+    Object.entries(j.feedRounds as Record<string, any>).map(([r, f]) => [r, { ...f, medians: f.medians.map(BigInt), batchIndex: BigInt(f.batchIndex), attestation: f.attestation && attestationFromJson(f.attestation) }]),
   );
   return {
     params,

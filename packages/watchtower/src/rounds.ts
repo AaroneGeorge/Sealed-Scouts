@@ -1,7 +1,7 @@
 // Replay one round from inbox data and judge what the operator did with it: its OPEN and the round it
 // posted to PriceFeed. Pure: the same entries always give the same verdict.
 import {
-  REJECT, decodeMsg, deriveRound, roundWindows, scoutAddress, type InboxEntry, type RoundParams, type RoundResult,
+  REJECT, decodeMsg, deriveRound, roundWindows, scoutAddress, type InboxEntry, type RoundAttestation, type RoundParams, type RoundResult,
 } from "@sealed-scouts/core";
 
 /** A round as PriceFeed holds it. */
@@ -13,6 +13,16 @@ export interface FeedRound {
   reportsRoot: `0x${string}`;
   reportCount: number;
   batchIndex: bigint;
+  /** The attestation the operator posted (its hash is what the anchor signs). Medians above may be the court's. */
+  attestation?: RoundAttestation;
+}
+
+/** A feed round exactly as an attestation posts it. */
+export function feedRoundFromAttestation(att: RoundAttestation, status: FeedRound["status"]): FeedRound {
+  return {
+    status, feedIds: [...att.feedIds], medians: [...att.medians], counts: [...att.counts], reportsRoot: att.reportsRoot,
+    reportCount: att.reportCount, batchIndex: att.batchIndex, attestation: att,
+  };
 }
 
 export type RoundVerdict =

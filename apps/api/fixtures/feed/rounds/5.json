@@ -21,7 +21,7 @@
    "count": 5
   }
  ],
- "reportsRoot": "0xcb64b52195228e3480a7dd4efa05869ddf5aa3518f22063029a7f079ebebf7ee",
+ "reportsRoot": "0x14df0f0738e29edf7ab52a9e2559dda2893fe71963b44c1b289ec35a670821a0",
  "reports": [
   {
    "scout": "qor134s38tk7avkjstzx2hel6lu64flmvxfjemj430",
@@ -133,7 +133,7 @@
   {
    "round": "5",
    "scout": "0x15a466251e0a8458003c70d1d03f58f39189bd06",
-   "salt": "0x5854cbda3badcf0475d26f6f43ca063d",
+   "salt": "0xb172309418dc451e5a233451fc51eb6d",
    "feedIds": [
     1,
     2,
@@ -144,12 +144,12 @@
     "6255748600000",
     "99910014"
    ],
-   "commitSigHash": "0x67068135d4f93938687ef0e369c7efccf6060009bb039ad34f934fb7faa0ca0f"
+   "commitSigHash": "0x0836e29f12a87d005bb6ce01c0f680effdb9ddcdbbe7bce22e3a94e4cada9a88"
   },
   {
    "round": "5",
    "scout": "0x8d6113aedeeb2d282c4655f3fd7f9aaa7fb61932",
-   "salt": "0x37e6bddfcc7daf73c1b7e49e71130cf1",
+   "salt": "0x1e92a0972202035119e2229c1f8c85cd",
    "feedIds": [
     1,
     2,
@@ -160,12 +160,12 @@
     "6259502800000",
     "99969972"
    ],
-   "commitSigHash": "0xf9e58a5830daed671ff69a11bc5b3fe6630f10263dc15e3c48f5571bbb3a30ef"
+   "commitSigHash": "0x0472a86e57ef736c4de92d7d9895161c511aac8971613d23ced9e367a1541ebf"
   },
   {
    "round": "5",
    "scout": "0x9d5c2494967abf1299f73e291fcab434865f930a",
-   "salt": "0x3c4e8d2bb378cb4993e7c35429cf3d6d",
+   "salt": "0xa8785ff2097e45b19eacc83a4c446eac",
    "feedIds": [
     1,
     2,
@@ -176,12 +176,12 @@
     "6258251400000",
     "99949986"
    ],
-   "commitSigHash": "0xc7650ab80f7d2f9c21eff5ac7cf805798df6505eb2de046e16271670f735b891"
+   "commitSigHash": "0xc6aa02143f8ab8c3ace4bdb466a251d016f8360238f9c1cb337d94567603f156"
   },
   {
    "round": "5",
    "scout": "0xc8d7d841fa7458f7503c9731350efa4e59454a87",
-   "salt": "0x36223cb86873601cebfe1b9ac43fdbad",
+   "salt": "0x454ce9e652ce2e592867f584280e7e3d",
    "feedIds": [
     1,
     2,
@@ -192,12 +192,12 @@
     "6257000000000",
     "99930000"
    ],
-   "commitSigHash": "0xd177bead7ef0064161fd59919129df85695d46b355e313c7651efea6722f403b"
+   "commitSigHash": "0x1d5bf361293dd90bbb04763cc8ff7f969071e4de2c921776ee1ea4274a656328"
   },
   {
    "round": "5",
    "scout": "0xdd6f6ce22a927f79d03553d453d6be78a48a6401",
-   "salt": "0x3d1cca060d4eb80201cd11ddfe14c894",
+   "salt": "0x037b9453ed121b131a69e31bf3e173aa",
    "feedIds": [
     1,
     2,
@@ -208,7 +208,7 @@
     "6254497200000",
     "99890028"
    ],
-   "commitSigHash": "0x0d394727a67c507a684e70bf1e2aaf75eccad7bf370d62e0a4b45a49c6f289e1"
+   "commitSigHash": "0x109b324e26c4b36410a23fd6fc4db9f2ae210d223101ece8c82573631b479cf2"
   }
  ],
  "outliers": [],
@@ -241,9 +241,35 @@
    5,
    5
   ],
-  "reportsRoot": "0xcb64b52195228e3480a7dd4efa05869ddf5aa3518f22063029a7f079ebebf7ee",
+  "reportsRoot": "0x14df0f0738e29edf7ab52a9e2559dda2893fe71963b44c1b289ec35a670821a0",
   "reportCount": 5,
-  "batchIndex": "2"
+  "batchIndex": "6"
  },
- "challenges": []
+ "challenges": [],
+ "attestation": {
+  "round": "5",
+  "batchIndex": "6",
+  "inboxStart": "81",
+  "inboxEnd": "97",
+  "closeHeight": "2680",
+  "closeTime": "1795003484",
+  "feedIds": [
+   1,
+   2,
+   3
+  ],
+  "medians": [
+   "175400000000",
+   "6257000000000",
+   "99930000"
+  ],
+  "counts": [
+   5,
+   5,
+   5
+  ],
+  "reportsRoot": "0x14df0f0738e29edf7ab52a9e2559dda2893fe71963b44c1b289ec35a670821a0",
+  "reportCount": 5
+ },
+ "roundHash": "0x8b597c1175e4b499b680e2364f4a418c54a148bd7da6c312486e31ecf174d219"
 }

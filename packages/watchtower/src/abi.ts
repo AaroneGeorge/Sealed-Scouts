@@ -13,6 +13,7 @@ export const PRICE_FEED_ABI = parseAbi([
   `function challengeMedian(uint64 round, ${LEAF}[] leaves)`,
   `function postRound(${ATTESTATION} att, bytes32 stateRoot, uint64 txCount, bytes anchorSig)`,
   `function verifyReceipt(${ATTESTATION} att, bytes32 stateRoot, uint64 txCount, bytes anchorSig) view returns (bool)`,
+  `event RoundPosted(uint64 indexed round, bytes32 roundHash, bytes32 stateRoot, uint64 txCount, ${ATTESTATION} att, bytes anchorSig)`,
   "error BadAttestation()",
   "error BadSignature()",
   "error StaleRound()",

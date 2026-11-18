@@ -1,5 +1,5 @@
 {
- "updatedAt": "2026-11-18T19:57:56.719Z",
+ "updatedAt": "2026-11-18T20:11:03.760Z",
  "mode": "observe",
  "rollupId": "sealed-scouts-sim",
  "chainHeight": "2760",
@@ -15,30 +15,54 @@
   "latest": "5"
  },
  "batches": {
-  "replayed": 3,
-  "ok": 2,
+  "replayed": 7,
+  "ok": 6,
   "fraud": 1,
   "skipped": 0,
-  "latestIndex": 2,
+  "latestIndex": 6,
   "list": [
    {
     "batchIndex": 0,
     "verdict": "ok",
-    "entries": 33,
+    "entries": 17,
     "proofBytes": 0
    },
    {
     "batchIndex": 1,
-    "verdict": "fraud",
-    "entries": 32,
-    "honestStateRoot": "bae645dabae2a59430d4315c1f004da1051a4e963b346594de34f9ac76d0b1a9",
-    "honestWithdrawalsRoot": "",
-    "proofBytes": 102275
+    "verdict": "ok",
+    "entries": 16,
+    "proofBytes": 0
    },
    {
     "batchIndex": 2,
     "verdict": "ok",
-    "entries": 64,
+    "entries": 17,
+    "proofBytes": 0
+   },
+   {
+    "batchIndex": 3,
+    "verdict": "fraud",
+    "entries": 15,
+    "honestStateRoot": "bae645dabae2a59430d4315c1f004da1051a4e963b346594de34f9ac76d0b1a9",
+    "honestWithdrawalsRoot": "",
+    "proofBytes": 49518
+   },
+   {
+    "batchIndex": 4,
+    "verdict": "ok",
+    "entries": 15,
+    "proofBytes": 0
+   },
+   {
+    "batchIndex": 5,
+    "verdict": "ok",
+    "entries": 16,
+    "proofBytes": 0
+   },
+   {
+    "batchIndex": 6,
+    "verdict": "ok",
+    "entries": 16,
     "proofBytes": 0
    }
   ]
@@ -48,13 +72,13 @@
   {
    "kind": "median",
    "target": "round 4",
-   "at": "2026-11-18T19:57:56.432Z",
+   "at": "2026-11-18T20:11:03.393Z",
    "sent": false
   },
   {
    "kind": "batch",
-   "target": "batch 1",
-   "at": "2026-11-18T19:57:56.718Z",
+   "target": "batch 3",
+   "at": "2026-11-18T20:11:03.759Z",
    "sent": false
   }
  ],

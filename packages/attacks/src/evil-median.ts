@@ -2,7 +2,9 @@
 // accepts the round as Pending. The watchtower replays the round from inbox data, sees a different median and
 // challenges; the court recomputes the median from the committed reports, corrects the price and slashes.
 import { formatE8 } from "@sealed-scouts/scout";
-import { FeedWriter, Watchtower, buildDemoWorld, derive, feedRoundFor, liveChallenger, liveSource, PRICE_FEED_ABI } from "@sealed-scouts/watchtower";
+import {
+  FeedWriter, PRICE_FEED_ABI, Watchtower, buildDemoWorld, derive, feedRoundFor, liveChallenger, liveSource, simTowerConfig, towerConfigFrom,
+} from "@sealed-scouts/watchtower";
 import { chain as defaultChain, loadAccount, type Chain } from "@sealed-scouts/chain";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,7 +26,7 @@ export async function evilMedianDryRun(): Promise<Step[]> {
     { attack: A, step: `operator posts round ${round} with fETH = $${formatE8(posted.medians[0]!)}, anchor validly signed`, verdict: "ACCEPTED", where: "simulation", evidence: { status: posted.status, reportsRoot: posted.reportsRoot } },
   ];
 
-  const watchtower = new Watchtower({ params: sim.params, scouts: [] }, sim.asSource(), new FeedWriter(mkdtempSync(join(tmpdir(), "ss-evil-"))), court, quiet);
+  const watchtower = new Watchtower(simTowerConfig(sim.params), sim.asSource(), new FeedWriter(mkdtempSync(join(tmpdir(), "ss-evil-"))), court, quiet);
   await watchtower.sync();
   const c = watchtower.challenges.find((x) => x.target === `round ${round}`);
   const after = sim.feedRounds.get(round)!;
@@ -56,7 +58,7 @@ export async function evilMedianLive(opts: { timeoutMs?: number; chain?: Chain }
   if (!d.priceFeed) throw new Error("no PriceFeed address in the deployment");
   const tower = await loadAccount("TOWER");
   const watchtower = new Watchtower(
-    { params: { ...d.timing, ...d.rules, chainId: d.chainId, rollupId: d.rollupId, operator: d.operator }, scouts: d.scouts },
+    towerConfigFrom(d),
     liveSource(chain, d.rollupId, d.priceFeed), new FeedWriter(mkdtempSync(join(tmpdir(), "ss-evil-"))), liveChallenger(chain, tower, d.rollupId, d.priceFeed),
   );
   const deadline = Date.now() + (opts.timeoutMs ?? 30 * 60_000);
@@ -69,6 +71,7 @@ export async function evilMedianLive(opts: { timeoutMs?: number; chain?: Chain }
       const [price] = await chain.evm.publicClient.readContract({ address: d.priceFeed, abi: PRICE_FEED_ABI, functionName: "points", args: [round, 1] });
       return [{
         attack: A, step: `operator's wrong median in round ${round} challenged`, verdict: Number(status) === 3 ? "REFUSED" : "NOT REFUSED", where: "evm",
+        claim: { id: "court-slash", layer: "evm", txKey: "challengeTx" },
         evidence: { challengeTx: c.txHash ?? "", ...(c.error ? errorEvidence(new Error(c.error)) : {}), feedStatus: Number(status), fETH: formatE8(price) },
       }];
     }

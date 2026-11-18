@@ -8,9 +8,9 @@ import { parseArgs } from "node:util";
 import { chain as defaultChain, loadAccount } from "@sealed-scouts/chain";
 import { loadDeployment } from "@sealed-scouts/scout";
 import { DEFAULT_FEED_DIR, FeedWriter } from "./feed.js";
-import { liveChallenger, liveSource } from "./live.js";
+import { liveChallenger, liveSource, towerConfigFrom } from "./live.js";
 import { buildDemoWorld } from "./scenario.js";
-import { sourceFromJson } from "./sim.js";
+import { simTowerConfig, sourceFromJson } from "./sim.js";
 import type { Challenger, TowerSource } from "./source.js";
 import { Watchtower, type TowerConfig } from "./tower.js";
 
@@ -33,12 +33,12 @@ const fixture = values.fixture;
 if (fixture) {
   if (values.active) throw new Error("--active works only on the live chain");
   const recorded = fixture === "demo" ? sourceFromJson(buildDemoWorld().sim.toJSON() as Record<string, any>) : sourceFromJson(JSON.parse(readFileSync(fixture, "utf8")));
-  cfg = { params: recorded.params, scouts: [] };
+  cfg = simTowerConfig(recorded.params);
   source = recorded.source;
 } else {
   const d = loadDeployment();
   if (!d) throw new Error("deployments/diana.json is missing: the rollup is not launched yet (try --fixture)");
-  cfg = { params: { ...d.timing, ...d.rules, chainId: d.chainId, rollupId: d.rollupId, operator: d.operator }, scouts: d.scouts };
+  cfg = towerConfigFrom(d);
   source = liveSource(defaultChain(), d.rollupId, d.priceFeed);
   if (values.active) challenger = liveChallenger(defaultChain(), await loadAccount("TOWER"), d.rollupId, d.priceFeed);
 }

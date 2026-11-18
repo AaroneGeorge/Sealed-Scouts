@@ -1,0 +1,147 @@
+{
+  "note": "TEST-ONLY vectors from packages/core/scripts/gen-vectors.ts. Keys come from public seeds; never use them on chain.",
+  "medianRule": "element floor((n-1)/2) of the ascending list",
+  "medians": [
+    {
+      "values": [
+        "5"
+      ],
+      "index": 0,
+      "median": "5"
+    },
+    {
+      "values": [
+        "7",
+        "3"
+      ],
+      "index": 0,
+      "median": "3"
+    },
+    {
+      "values": [
+        "3",
+        "1",
+        "2"
+      ],
+      "index": 1,
+      "median": "2"
+    },
+    {
+      "values": [
+        "10",
+        "40",
+        "20",
+        "30"
+      ],
+      "index": 1,
+      "median": "20"
+    },
+    {
+      "values": [
+        "9",
+        "1",
+        "8",
+        "2",
+        "7"
+      ],
+      "index": 2,
+      "median": "7"
+    },
+    {
+      "values": [
+        "4",
+        "4",
+        "4",
+        "1",
+        "9",
+        "9"
+      ],
+      "index": 2,
+      "median": "4"
+    },
+    {
+      "values": [
+        "340282366920938463463374607431768211455",
+        "0",
+        "1"
+      ],
+      "index": 1,
+      "median": "1"
+    }
+  ],
+  "bandRule": "inBand: |p-m|*10000 <= bandBps*m. outlier: |p-m|*10000 > slashBps*m.",
+  "bands": [
+    {
+      "price": "300000000000",
+      "median": "300000000000",
+      "bandBps": 200,
+      "slashBps": 1000,
+      "inBand": true,
+      "outlier": false
+    },
+    {
+      "price": "306000000000",
+      "median": "300000000000",
+      "bandBps": 200,
+      "slashBps": 1000,
+      "inBand": true,
+      "outlier": false
+    },
+    {
+      "price": "306000000001",
+      "median": "300000000000",
+      "bandBps": 200,
+      "slashBps": 1000,
+      "inBand": false,
+      "outlier": false
+    },
+    {
+      "price": "294000000000",
+      "median": "300000000000",
+      "bandBps": 200,
+      "slashBps": 1000,
+      "inBand": true,
+      "outlier": false
+    },
+    {
+      "price": "293999999999",
+      "median": "300000000000",
+      "bandBps": 200,
+      "slashBps": 1000,
+      "inBand": false,
+      "outlier": false
+    },
+    {
+      "price": "330000000000",
+      "median": "300000000000",
+      "bandBps": 200,
+      "slashBps": 1000,
+      "inBand": false,
+      "outlier": false
+    },
+    {
+      "price": "330000000001",
+      "median": "300000000000",
+      "bandBps": 200,
+      "slashBps": 1000,
+      "inBand": false,
+      "outlier": true
+    },
+    {
+      "price": "270000000000",
+      "median": "300000000000",
+      "bandBps": 200,
+      "slashBps": 1000,
+      "inBand": false,
+      "outlier": false
+    },
+    {
+      "price": "269999999999",
+      "median": "300000000000",
+      "bandBps": 200,
+      "slashBps": 1000,
+      "inBand": false,
+      "outlier": true
+    }
+  ]
+}

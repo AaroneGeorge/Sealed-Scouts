@@ -43,4 +43,13 @@ if (e) {
     "",
   );
 }
+const k = read("contracts-rehearsal");
+if (k) {
+  lines.push(
+    "## 5. Contract deploy rehearsal (not the launch deploy)",
+    `- PriceFeed ${k.PriceFeed} tx ${k.txs.PriceFeed} gas ${k.gasUsed.PriceFeed}; ScoutLend ${k.ScoutLend} tx ${k.txs.ScoutLend} gas ${k.gasUsed.ScoutLend}`,
+    `- twoSigMode ${k.twoSigMode}; spent ${Number(k.spentUqor) / 1e6} QOR`,
+    "",
+  );
+}
 console.log(lines.join("\n"));

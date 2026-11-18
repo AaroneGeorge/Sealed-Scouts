@@ -19,7 +19,7 @@ import {
 } from "@qorechain/rdk";
 import { fetchPqcStatus, pqcStatusPublicKey } from "@qorechain/sdk";
 import type { SealKeyPair } from "@qorechain/qoreseal";
-import { getJson, type Account, type Chain, type InboxEntry } from "@sealed-scouts/chain";
+import { ScoutEligibility, getJson, type Account, type Chain, type InboxEntry } from "@sealed-scouts/chain";
 import {
   deriveRound,
   fromHex,
@@ -33,6 +33,7 @@ import {
 } from "@sealed-scouts/core";
 import { ledgerKeyOf, type LedgerKey } from "@sealed-scouts/scout";
 import { anchorSignature } from "./anchor.js";
+import { feedTwoSigMode, roundSignature } from "./contracts.js";
 import { evilMedianFor, retireEvilMedian, withEvilMedian, type EvilMedian } from "./evil.js";
 import { timingOf, type DeploymentFile } from "./deployment.js";
 import { replayLedger, type SettledBatch } from "./ledger.js";
@@ -63,6 +64,9 @@ export class Operator {
   private readonly params: RoundParams;
   private readonly ledgerKey: LedgerKey;
   private readonly relay?: Relayer;
+  private readonly eligibility: ScoutEligibility;
+  /** PriceFeed's mode: anchors with an empty validator_set_hash plus a separate round signature (SPEC Changes 14). */
+  private twoSig = process.env.SS_TWO_SIG === "true";
   private readonly pqKeys = new Map<string, Uint8Array>();
   private readonly joins = new Map<string, Uint8Array>();
   private ledger = new QledgerLedger();
@@ -87,6 +91,7 @@ export class Operator {
     };
     this.ledgerKey = ledgerKeyOf(d.operator.keys.pqc.secretKey);
     if (d.relayer && dep.contracts.PriceFeed) this.relay = new Relayer(chain, d.relayer, dep.contracts.PriceFeed);
+    this.eligibility = new ScoutEligibility(chain.evm.publicClient, dep.scouts, dep.contracts.PriceFeed);
     this.state = d.store.load();
     this.log = d.log ?? ((l) => console.log(`${new Date().toISOString()} ${l}`));
   }
@@ -97,6 +102,9 @@ export class Operator {
 
   /** Rebuild the ledger and the JOIN map from the chain. Call once before the first tick. */
   async start(): Promise<void> {
+    // The deployed feed decides the signature mode; without one the env var does.
+    if (this.d.deployment.contracts.PriceFeed) this.twoSig = await feedTwoSigMode(this.d.chain, this.d.deployment.contracts.PriceFeed);
+    this.log(`signature mode: ${this.twoSig ? "two signatures (anchor with empty vsh + round signature)" : "round hash in the anchor's validator_set_hash"}`);
     const r = await replayLedger(this.env, this.rest, this.d.chain.inbox);
     this.ledger = r.ledger;
     this.batches = r.batches;
@@ -153,8 +161,10 @@ export class Operator {
   private async settle(round: bigint): Promise<void> {
     const dep = this.d.deployment;
     await this.loadPqKeys(round);
-    const eligible = new Set(dep.scouts);
-    const result = deriveRound(this.entries, round, this.params, (scout) => eligible.has(scout));
+    // Eligibility is read at the round's close height, the same snapshot every watchtower takes.
+    await this.eligibility.snapshot(round, roundWindows(round, this.params).commitEnd);
+    const result = deriveRound(this.entries, round, this.params, this.eligibility.eligible);
+    this.eligibility.forget(round);
 
     let plan;
     try {
@@ -174,7 +184,7 @@ export class Operator {
     const lie = this.evilMedian(round, result);
     const att = lie ? withEvilMedian(honest, lie) : honest;
     const rh = roundHash(att, { chainId: BigInt(dep.evmChainId), rollupId: dep.rollupId });
-    const vsh = fromHex(rh);
+    const vsh = this.twoSig ? new Uint8Array() : fromHex(rh);
     const sig = anchorSignature(this.d.operator, {
       chainId: dep.chainId,
       layerId: dep.rollupId,
@@ -184,7 +194,7 @@ export class Operator {
       validatorSetHash: vsh,
     });
     const tx = await this.d.chain.native.sendOrThrow(this.d.operator, [
-      submitBatchMsg({ sequencer: this.d.operator.address, ...plan.input, validatorSetHash: vsh, anchorSignature: sig }),
+      submitBatchMsg({ sequencer: this.d.operator.address, ...plan.input, ...(this.twoSig ? {} : { validatorSetHash: vsh }), anchorSignature: sig }),
     ]);
     this.ledger = plan.ledger;
     if (lie) retireEvilMedian(lie);
@@ -197,10 +207,12 @@ export class Operator {
     });
     this.log(`round ${round}: ${result.status}, ${result.leaves.length} reports, batch ${plan.input.batchIndex} (${plan.entries.length} entries) anchored with round hash ${rh.slice(0, 12)}… tx ${tx.txHash}`);
 
+    // PriceFeed takes the anchor signature, or in two-signature mode anchorSig ‖ roundSig.
+    const feedSig = this.twoSig ? concat(sig, roundSignature(this.d.operator, dep.chainId, dep.rollupId, round, rh)) : sig;
     let relayed: unknown = "skipped: no quorum";
     if (result.status === "ok" && this.relay) {
       try {
-        relayed = await this.relay.postRound(att, toHex(plan.input.stateRoot), plan.input.txCount, toHex(sig));
+        relayed = await this.relay.postRound(att, toHex(plan.input.stateRoot), plan.input.txCount, toHex(feedSig));
         this.log(`round ${round}: relayed to PriceFeed ${JSON.stringify(relayed, big)}`);
       } catch (err) {
         relayed = `failed: ${(err as Error).message.split("\n")[0]}`;
@@ -218,6 +230,8 @@ export class Operator {
       roundHash: rh,
       batch: { index: plan.input.batchIndex, stateRoot: toHex(plan.input.stateRoot), txCount: plan.input.txCount, submitTx: tx.txHash },
       anchorSignature: toHex(sig),
+      feedSignature: toHex(feedSig),
+      twoSig: this.twoSig,
       relayed,
       ...(lie ? { evilMedian: { feedId: lie.feedId, posted: lie.price, honest: honest.medians[honest.feedIds.indexOf(lie.feedId)] } } : {}),
     });
@@ -352,6 +366,13 @@ function summary(r: RoundResult) {
     rejected: r.rejected,
     skippedByOpener: r.skippedByOpener,
   };
+}
+
+function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a);
+  out.set(b, a.length);
+  return out;
 }
 
 const big = (_k: string, v: unknown) => (typeof v === "bigint" ? v.toString() : v);

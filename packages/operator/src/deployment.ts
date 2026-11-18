@@ -73,6 +73,13 @@ export function mergeDeployment(mine: OwnKeys, path = DEPLOYMENT_PATH): Deployme
   return merged;
 }
 
+/** Write only `contracts` (for a deploy done from TypeScript); every other key stays as it is. */
+export function mergeContracts(contracts: DeploymentFile["contracts"], path = DEPLOYMENT_PATH): void {
+  const current = existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>) : {};
+  writeFileSync(path + ".tmp", JSON.stringify({ ...current, contracts: { ...(current.contracts ?? {}), ...contracts } }, null, 2) + "\n");
+  renameSync(path + ".tmp", path);
+}
+
 export function defaultDemo(): NonNullable<DeploymentFile["demo"]> {
   return { roundBlocks: "90", commitBlocks: "45", openBlocks: "15", revealBlocks: "15" };
 }

@@ -69,3 +69,18 @@ describe("deployments/diana.json", () => {
     expect(timingOf({ ...d, demo: undefined }, true).roundBlocks).toBe(300n);
   });
 });
+
+describe("two-signature mode", () => {
+  it("signs the round text PriceFeed.roundSigMessage rebuilds (SPEC Changes 14)", async () => {
+    const { roundSigBytes, roundSignature } = await import("../src/contracts.js");
+    const { accountFromMnemonic } = await import("@sealed-scouts/chain");
+    const { mldsa87 } = await import("@qorechain/pqc");
+    const rh = `0x${"AB".repeat(32)}` as const;
+    const bytes = roundSigBytes("qorechain-diana", "sealed-scouts-1", 42n, rh);
+    expect(new TextDecoder().decode(bytes)).toBe(`qorechain-msg-v1|qorechain-diana|sealed-scouts/round/v1|sealed-scouts-1|42|${"ab".repeat(32)}`);
+    const op = await accountFromMnemonic("CUSTOM", "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about");
+    const sig = roundSignature(op, "qorechain-diana", "sealed-scouts-1", 42n, rh);
+    expect(sig).toHaveLength(4627);
+    expect(mldsa87.verify(op.keys.pqc.publicKey, bytes, sig)).toBe(true);
+  });
+});

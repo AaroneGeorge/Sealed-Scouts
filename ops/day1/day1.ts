@@ -1,7 +1,7 @@
 // Day-1 chain tests with faucet funds (plan 7.6, items 1-4). Each step writes its evidence as JSON.
 //   source ops/env.local.sh
 //   (cd ops/day1/probe && forge build)        # the evm step deploys this probe
-//   npx tsx ops/day1/day1.ts <anchor|keys|classical|post|evm|all> [--evidence <dir>]
+//   npx tsx ops/day1/day1.ts <anchor|keys|classical|post|evm|contracts|all> [--evidence <dir>]
 // Steps are safe to re-run: key registration is skipped when the key is already on chain.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -12,6 +12,7 @@ import { bank } from "@qorechain/sdk";
 import { toEvmAddress } from "@qorechain/evm";
 import { decodeEventLog, encodeFunctionData, parseAbi, toHex, type Hex } from "viem";
 import { chain, loadAccount, type Account, type Role, type TxResult } from "../../packages/chain/src/index.js";
+import { deployContracts, feedConfig, feedTwoSigMode } from "../../packages/operator/src/contracts.js";
 import {
   commitment,
   encodeMsg,
@@ -222,11 +223,26 @@ async function evm() {
   save("evm-probe", { account: op.address, evm: op.evm, anchor: { ...anchor, message: `${anchor.message.length / 2 - 1} bytes` }, deployed, check });
 }
 
-const steps: Record<string, () => Promise<void>> = { anchor, keys, classical, post, evm };
+/**
+ * 5. Rehearse the contract deploy (about 0.7 QOR): PriceFeed + ScoutLend from Track B's artifacts in an unscoped
+ * window. Evidence only: deployments/diana.json is left alone, the launch deploys the contracts it will use.
+ */
+async function contracts() {
+  const op = await loadAccount("OPERATOR");
+  const before = await c.native.balance(op.address);
+  const cfg = feedConfig({ operatorEvm: op.evm, rollupId: "sealed-scouts-1", chainId: c.config.chainId });
+  const d = await deployContracts(c, op, cfg);
+  const twoSig = await feedTwoSigMode(c, d.PriceFeed);
+  const spent = before - (await c.native.balance(op.address));
+  console.log(`rehearsal: PriceFeed ${d.PriceFeed} (gas ${d.gasUsed.PriceFeed}), ScoutLend ${d.ScoutLend} (gas ${d.gasUsed.ScoutLend}); spent ${Number(spent) / 1e6} QOR`);
+  save("contracts-rehearsal", { ...d, twoSigMode: twoSig, spentUqor: spent, config: cfg, note: "rehearsal only, not written to deployments/diana.json" });
+}
+
+const steps: Record<string, () => Promise<void>> = { anchor, keys, classical, post, evm, contracts };
 const step = process.argv[2] ?? "all";
-const names = step === "all" ? ["keys", "classical", "post", "evm"] : steps[step] ? [step] : [];
+const names = step === "all" ? ["keys", "classical", "post", "evm", "contracts"] : steps[step] ? [step] : [];
 if (names.length === 0) {
-  console.error(`unknown step ${step}: use anchor | keys | classical | post | evm | all`);
+  console.error(`unknown step ${step}: use anchor | keys | classical | post | evm | contracts | all`);
   process.exit(1);
 }
 // Each step runs even if an earlier one failed (they are independent once keys exist); the summary says which.

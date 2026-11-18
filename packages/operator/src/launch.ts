@@ -1,7 +1,9 @@
 // npm run launch -w @sealed-scouts/operator -- --yes [--scouts SCOUT1,SCOUT2,SCOUT3] [--reward-pool QOR]
 // Creates the rollup (qledger-v1, optimistic, based), bonds the submitter, registers the operator's ML-DSA-87 and
-// ML-KEM keys, funds the reward pool on the ledger, and writes deployments/diana.json. Every step is skipped
-// when already done, so a failed launch can simply be run again. Needs about 12,000 test QOR on OPERATOR.
+// ML-KEM keys, funds the reward pool on the ledger, and writes deployments/diana.json. Then deploys PriceFeed and
+// ScoutLend (unscoped EVM window), and funds the operator bond and the scouts' bonds on PriceFeed. Every step is
+// skipped when already done, so a failed launch can simply be run again. Needs about 12,000 test QOR on OPERATOR.
+// Before each relay the loop asks PriceFeed.verifyReceipt and posts only if it accepts (the receipt gate).
 import {
   RestClient,
   bondRollupSubmitterMsg,
@@ -12,7 +14,8 @@ import {
 } from "@qorechain/rdk";
 import { chain, loadAccount, type Role } from "@sealed-scouts/chain";
 import { ledgerKeyOf } from "@sealed-scouts/scout";
-import { defaultDemo, defaultParams, mergeDeployment, readDeployment, DEPLOYMENT_PATH, type OwnKeys } from "./deployment.js";
+import { deployContracts, feedConfig, fundBonds } from "./contracts.js";
+import { defaultDemo, defaultParams, mergeContracts, mergeDeployment, readDeployment, DEPLOYMENT_PATH, type OwnKeys } from "./deployment.js";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(name);
@@ -31,8 +34,15 @@ const stake = BigInt(params.minStakeForRollup);
 const bond = BigInt(params.minSubmitterBond ?? "1000000000");
 const pool = BigInt(Math.round(Number(option("--reward-pool", "20")) * 1e6));
 const balance = await c.native.balance(op.address);
-const need = stake + bond + pool + 50_000_000n; // plus fees and the EVM bond later
-console.log(`operator ${op.address}: ${qor(balance)}; launch needs about ${qor(need)} (stake ${qor(stake)}, bond ${qor(bond)}, reward pool ${qor(pool)})`);
+const scoutRoles = option("--scouts", "SCOUT1,SCOUT2,SCOUT3").split(",") as Role[];
+const scoutBond = BigInt(Math.round(Number(process.env.SS_SCOUT_BOND_QOR ?? "1") * 1e6));
+const feedBond = BigInt(process.env.SS_MIN_OPERATOR_BOND ?? 10n ** 19n) / 10n ** 12n; // wei -> uqor
+const evmBonds = feedBond + scoutBond * BigInt(scoutRoles.length);
+const need = stake + bond + pool + evmBonds + 50_000_000n; // plus fees, contract deploys about 1 QOR
+console.log(
+  `operator ${op.address}: ${qor(balance)}; launch needs about ${qor(need)} (stake ${qor(stake)}, submitter bond ${qor(bond)}, ` +
+    `reward pool ${qor(pool)}, PriceFeed bonds ${qor(evmBonds)}, fees)`,
+);
 
 if (!flag("--yes")) {
   console.log("dry run: nothing sent. Add --yes to launch.");
@@ -90,7 +100,6 @@ await step("rewardPoolDeposit", async () => {
   return (await c.native.sendOrThrow(op, [depositToRollupMsg({ depositor: op.address, rollupId: ROLLUP_ID, account, amount: pool })])).txHash;
 });
 
-const scoutRoles = option("--scouts", "SCOUT1,SCOUT2,SCOUT3").split(",") as Role[];
 const scouts = await Promise.all(scoutRoles.map(async (r) => (await loadAccount(r)).address));
 const height = BigInt(await rest.getLatestHeight());
 const same = prior?.rollupId === ROLLUP_ID;
@@ -111,3 +120,21 @@ const deployment: OwnKeys = {
 };
 mergeDeployment(deployment);
 console.log(`wrote ${DEPLOYMENT_PATH}: rollup ${ROLLUP_ID}, rounds start at height ${deployment.genesisHeight}`);
+
+await step("deployContracts", async () => {
+  const existing = readDeployment()?.contracts;
+  if (existing?.PriceFeed && existing.ScoutLend) return `exists ${existing.PriceFeed}`;
+  const d = await deployContracts(c, op, feedConfig(deployment));
+  mergeContracts({ PriceFeed: d.PriceFeed, ScoutLend: d.ScoutLend });
+  console.log(`PriceFeed ${d.PriceFeed} (gas ${d.gasUsed.PriceFeed}), ScoutLend ${d.ScoutLend} (gas ${d.gasUsed.ScoutLend})`);
+  return d.txs.PriceFeed;
+});
+await step("fundBonds", async () => {
+  const feed = readDeployment()!.contracts.PriceFeed!;
+  const hashes = await fundBonds(c, op, feed, {
+    operatorWei: feedBond * 10n ** 12n,
+    scouts: scouts.map((qor1) => ({ qor1, wei: scoutBond * 10n ** 12n })),
+  });
+  return hashes.join(",");
+});
+mergeDeployment({ ...deployment, txs });

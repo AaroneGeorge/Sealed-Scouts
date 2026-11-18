@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { parseAbi, type Abi, type Hex } from "viem";
 import type { Account, Chain } from "@sealed-scouts/chain";
 import { ROUND_ATTESTATION_ABI, type RoundAttestation } from "@sealed-scouts/core";
+import { verifyOnFeed } from "./contracts.js";
 
 const OUT_ABI = new URL("../../../contracts/out-abi/PriceFeed.json", import.meta.url).pathname;
 const ATT = `(${ROUND_ATTESTATION_ABI.components.map((c) => `${c.type} ${c.name}`).join(", ")})`;
@@ -29,9 +30,13 @@ export class Relayer {
   ) {}
 
   async postRound(att: RoundAttestation, stateRoot: Hex, txCount: bigint, anchorSig: Hex): Promise<{ hash: Hex; gasUsed: bigint; status: string }> {
-    await this.chain.evm.ensureWindow(this.account, { targets: [this.priceFeed], maxTxs: 200, blocks: 17_280 }, { blocks: 30, txs: 1 });
     const pub = this.chain.evm.publicClient;
     const args = [att, stateRoot, txCount, anchorSig] as const;
+    // Gate: PriceFeed must accept the round in its own view check before we pay for a postRound.
+    if (!(await verifyOnFeed(this.chain, this.priceFeed, att, stateRoot, txCount, anchorSig))) {
+      throw new Error(`PriceFeed.verifyReceipt refused round ${att.round}: not posting (check the signature mode and the anchor)`);
+    }
+    await this.chain.evm.ensureWindow(this.account, { targets: [this.priceFeed], maxTxs: 200, blocks: 17_280 }, { blocks: 30, txs: 1 });
     const gas = await pub.estimateContractGas({ address: this.priceFeed, abi: this.abi, functionName: "postRound", args, account: this.account.evm });
     const hash = await this.chain.evm.wallet(this.account).writeContract({
       address: this.priceFeed,

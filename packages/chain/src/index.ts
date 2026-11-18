@@ -12,6 +12,7 @@ export * from "./http.js";
 export * from "./native.js";
 export * from "./inbox.js";
 export * from "./evm.js";
+export * from "./bonds.js";
 
 export interface Chain {
   config: ChainConfig;

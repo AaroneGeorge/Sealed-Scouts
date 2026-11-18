@@ -8,3 +8,4 @@ export * from "./relay.js";
 export * from "./rewards.js";
 export * from "./state.js";
 export * from "./evil.js";
+export * from "./contracts.js";

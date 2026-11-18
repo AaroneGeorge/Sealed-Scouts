@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import {
-  anchorSignBytesForBatch, bech32ToHex, buildSettlementReceipt, createRdkClient, verifySettlementReceipt,
+  anchorSignBytesForBatch, bech32ToHex, buildSettlementReceipt, createRdkClient, decodeWireBytes, verifySettlementReceipt,
   type SettlementReceipt,
 } from "@qorechain/rdk";
 import { decodeFunctionResult, encodeFunctionData, type Abi, type Hex } from "viem";
@@ -78,7 +78,39 @@ const priceFeedAbi = [
     inputs: [att, { type: "bytes32" }, { type: "uint64" }, { type: "bytes" }], outputs: [{ type: "bool" }] },
   { type: "function", name: "latest", stateMutability: "view", inputs: [{ type: "uint16" }],
     outputs: [{ type: "uint128" }, { type: "uint64" }, { type: "uint64" }, { type: "uint8" }] },
+  { type: "function", name: "twoSigMode", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
 ] as const satisfies Abi;
+
+const SIG_HEX = 2 * 4627;
+
+/** QoreSign bytes of the round signature in two-signature mode (docs/SPEC.md, Changes 14). */
+const roundSigBytes = (rollupId: string, round: string, roundHash: string) =>
+  hex0x(Buffer.from(`qorechain-msg-v1|${CHAIN_ID}|sealed-scouts/round/v1|${rollupId}|${round}|${roundHash.replace(/^0x/, "").toLowerCase()}`).toString("hex"));
+
+interface AnchorRaw { layer_height: string; state_root: string | null; validator_set_hash: string | null; pqc_aggregate_signature: string | null; transaction_count: string }
+
+/**
+ * The anchor for one batch, read straight from REST: the chain lists a layer's anchors in one response today, but we
+ * follow `next_key` in case it pages, then fall back to the newest anchor. Independent of the RDK's own lookup.
+ */
+async function findAnchor(layerId: string, batchIndex: number, rootHex: string): Promise<AnchorRaw | undefined> {
+  const rest = process.env.QORE_REST ?? "https://api-testnet.qore.host";
+  const get = async <T>(path: string) => (await (await politeFetch(rest + path)).json()) as T;
+  const hit = (a?: AnchorRaw) => !!a && Number(a.layer_height) === batchIndex && hex0x(Buffer.from(decodeWireBytes(a.state_root ?? "")).toString("hex")) === hex0x(rootHex);
+  const base = `/qorechain/multilayer/v1/anchors/${encodeURIComponent(layerId)}`;
+  let key: string | undefined;
+  for (let page = 0; page < 100; page++) {
+    const r = await get<{ anchors?: AnchorRaw[]; pagination?: { next_key?: string | null } }>(key ? `${base}?pagination.key=${encodeURIComponent(key)}` : base);
+    const found = (r.anchors ?? []).find(hit);
+    if (found) return found;
+    key = r.pagination?.next_key ?? undefined;
+    if (!key) break;
+  }
+  const latest = await get<{ anchor?: AnchorRaw }>(`/qorechain/multilayer/v1/anchor/${encodeURIComponent(layerId)}`);
+  return hit(latest.anchor) ? latest.anchor : undefined;
+}
+
+const wire = (v: string | null) => hex0x(Buffer.from(decodeWireBytes(v ?? "")).toString("hex"));
 
 const hex0x = (h: string) => (h.startsWith("0x") ? h : `0x${h}`) as Hex;
 
@@ -90,13 +122,16 @@ async function readJson<T>(path: string): Promise<T | undefined> {
   }
 }
 
-interface Deployments { rollupId?: string; demoUrl?: string; contracts?: { PriceFeed?: string } }
+interface Deployments { rollupId?: string; demoUrl?: string; priceFeed?: string; contracts?: { PriceFeed?: string } }
 /** The parts of the watchtower's feed files (packages/watchtower) that the judge reads. */
 interface RoundFile {
   round: string;
   verdict: string;
   feed: { status: string; batchIndex: string } | null;
   roundHash?: string;
+  /** Two-signature mode, and the anchorSig argument as posted to PriceFeed (anchorSig ‖ roundSig in that mode). */
+  twoSig?: boolean;
+  anchorSig?: string;
   attestation?: { round: string; batchIndex: string; inboxStart: string; inboxEnd: string; closeHeight: string; closeTime: string;
     feedIds: number[]; medians: string[]; counts: number[]; reportsRoot: string; reportCount: number };
 }
@@ -157,32 +192,42 @@ async function main() {
 
   // 2. The latest batch's settlement receipt, built and verified by the RDK: 6 checks against chain state.
   const batchIndex = args.batch ? Number(args.batch) : (await client.rest.getLatestBatch(rollupId)).batchIndex;
-  let receipt: SettlementReceipt;
+  let receipt: SettlementReceipt | undefined;
   try {
     receipt = await buildSettlementReceipt(client, rollupId, batchIndex);
+    const v = await verifySettlementReceipt(receipt, { client });
+    const checks = Object.entries(v.checks).map(([k, ok]) => `${ok ? "+" : "-"}${k}`).join(" ");
+    line(v.valid ? "PASS" : "FAIL", `Settlement receipt for batch ${batchIndex} (RDK, 6 checks)`, `${checks}${v.reason ? `: ${v.reason}` : ""}`);
   } catch (e) {
-    line("FAIL", `Settlement receipt for batch ${batchIndex}`, (e as Error).message);
+    line("FAIL", `Settlement receipt for batch ${batchIndex} (RDK, 6 checks)`, (e as Error).message);
+  }
+
+  // The same anchor, read by us (paged), for the checks below; they do not depend on the RDK's lookup.
+  const batch = await client.rest.getBatch(rollupId, batchIndex);
+  const raw = await findAnchor(rollup.layerId, batchIndex, Buffer.from(decodeWireBytes(batch.stateRoot)).toString("hex"));
+  if (!raw) {
+    line("FAIL", "Anchor for the batch", `no anchor on layer ${rollup.layerId} commits batch ${batchIndex}`);
     return finish();
   }
-  const v = await verifySettlementReceipt(receipt, { client });
-  const checks = Object.entries(v.checks).map(([k, ok]) => `${ok ? "+" : "-"}${k}`).join(" ");
-  line(v.valid ? "PASS" : "FAIL", `Settlement receipt for batch ${batchIndex} (RDK, 6 checks)`, `${checks}${v.reason ? `: ${v.reason}` : ""}`);
+  const anchor = { stateRoot: wire(raw.state_root), vsh: wire(raw.validator_set_hash), txCount: Number(raw.transaction_count), sig: wire(raw.pqc_aggregate_signature) };
 
   // 3. The same receipt with one digit changed must be refused.
-  const forged = { ...receipt, transactionCount: (receipt.transactionCount ?? 0) + 1 };
-  const vf = await verifySettlementReceipt(forged, { client });
-  line(vf.valid ? "FAIL" : "PASS", "Changed receipt is refused", vf.valid ? "a forged receipt verified!" : `refused: ${vf.reason}`);
+  if (receipt) {
+    const forged = { ...receipt, transactionCount: (receipt.transactionCount ?? 0) + 1 };
+    const vf = await verifySettlementReceipt(forged, { client });
+    line(vf.valid ? "FAIL" : "PASS", "Changed receipt is refused", vf.valid ? "a forged receipt verified!" : `refused: ${vf.reason}`);
+  }
 
   // 4. The same anchor signature checked by the chain's EVM precompile, with the key the EVM itself reports.
   const [registered, alg, pubkey] = (await evmCall(PQC_KEY_STATUS, precompiles, "pqcKeyStatus", [hex0x(bech32ToHex(rollup.creator))])) as [boolean, number, Hex, boolean];
   const message = anchorSignBytesForBatch({
-    chainId: CHAIN_ID, layerId: receipt.layerId, batchIndex: receipt.layerHeight, stateRoot: receipt.stateRoot,
-    txCount: receipt.transactionCount ?? 0, ...(receipt.validatorSetHash ? { validatorSetHash: receipt.validatorSetHash } : {}),
+    chainId: CHAIN_ID, layerId: rollup.layerId, batchIndex, stateRoot: anchor.stateRoot.slice(2),
+    txCount: anchor.txCount, ...(anchor.vsh !== "0x" ? { validatorSetHash: anchor.vsh.slice(2) } : {}),
   } as never);
-  const okSig = registered && alg === 1 && (await evmCall(PQC_VERIFY, precompiles, "pqcVerify", [pubkey, hex0x(receipt.pqcSignature), hex0x(Buffer.from(message).toString("hex"))])) === true;
+  const okSig = registered && alg === 1 && (await evmCall(PQC_VERIFY, precompiles, "pqcVerify", [pubkey, anchor.sig, hex0x(Buffer.from(message).toString("hex"))])) === true;
   const bad = Uint8Array.from(message);
   bad[bad.length - 9] ^= 1;
-  const badSig = (await evmCall(PQC_VERIFY, precompiles, "pqcVerify", [pubkey, hex0x(receipt.pqcSignature), hex0x(Buffer.from(bad).toString("hex"))])) === true;
+  const badSig = (await evmCall(PQC_VERIFY, precompiles, "pqcVerify", [pubkey, anchor.sig, hex0x(Buffer.from(bad).toString("hex"))])) === true;
   line(okSig && !badSig ? "PASS" : "FAIL", "pqcVerify on the EVM (eth_call)",
     `key from pqcKeyStatus: ${registered ? `ML-DSA-87, ${(pubkey.length - 2) / 2} bytes` : "not registered"}; anchor bytes ${message.length} B -> ${okSig}; one bit changed -> ${badSig}`);
 
@@ -205,25 +250,37 @@ async function main() {
     }
   }
   if (round) line(round.verdict === "match" || round.verdict === "corrected" ? "PASS" : "FAIL", `Watchtower replay of round ${round.round}`, `verdict ${round.verdict}; PriceFeed status ${round.feed!.status}`);
+  const priceFeed = deployments?.contracts?.PriceFeed ?? deployments?.priceFeed;
+  const twoSig = round?.twoSig ?? (priceFeed ? ((await evmCall(priceFeed, priceFeedAbi, "twoSigMode", [])) as boolean) : false);
   if (!round || !round.roundHash) {
-    line("SKIP", "Round bound into the anchor", !status ? "no watchtower feed found (pass --feed-url or --feed-dir)"
+    line("SKIP", "Creator signed the price round", !status ? "no watchtower feed found (pass --feed-url or --feed-dir)"
       : !round ? `the feed has no round in batch ${batchIndex}` : "the feed does not carry the round hash yet");
+  } else if (!twoSig) {
+    const ok = anchor.vsh.toLowerCase() === round.roundHash.toLowerCase();
+    line(ok ? "PASS" : "FAIL", `Round ${round.round} bound into the anchor`, `anchor slot ${anchor.vsh}; feed round hash ${round.roundHash}`);
+  } else if (!round.anchorSig) {
+    line("SKIP", "Creator signed the price round", "two-signature mode, but the feed does not carry the posted signatures yet");
   } else {
-    const ok = hex0x(receipt.validatorSetHash).toLowerCase() === round.roundHash.toLowerCase();
-    line(ok ? "PASS" : "FAIL", `Round ${round.round} bound into the anchor`, `anchor slot ${hex0x(receipt.validatorSetHash)}; feed round hash ${round.roundHash}`);
+    // Two-signature mode (SPEC Changes 14): the anchor slot is empty by design; the round has its own signature.
+    const sigs = hex0x(round.anchorSig);
+    const sameAnchor = sigs.length === 2 + 2 * SIG_HEX && hex0x(sigs.slice(2, 2 + SIG_HEX)).toLowerCase() === anchor.sig.toLowerCase();
+    const okRound = sameAnchor && anchor.vsh === "0x" && (await evmCall(PQC_VERIFY, precompiles, "pqcVerify",
+      [pubkey, hex0x(sigs.slice(2 + SIG_HEX)), roundSigBytes(rollupId, round.round, round.roundHash)])) === true;
+    line(okRound ? "PASS" : "FAIL", `Round ${round.round} signed by the creator (two-signature mode)`,
+      `empty anchor slot: ${anchor.vsh === "0x"}; posted anchor signature is the chain's: ${sameAnchor}; round signature via pqcVerify: ${okRound}`);
   }
 
-  // 6. PriceFeed recomputes the round hash and checks the same signature itself.
-  const priceFeed = deployments?.contracts?.PriceFeed;
-  if (!priceFeed || !round?.attestation) {
-    line("SKIP", "PriceFeed.verifyReceipt", priceFeed ? "no attestation for this batch in the feed" : "PriceFeed is not deployed yet");
+  // 6. PriceFeed recomputes the round hash and checks the same signature(s) itself.
+  const postedSigs = round?.anchorSig ? hex0x(round.anchorSig) : twoSig ? undefined : anchor.sig;
+  if (!priceFeed || !round?.attestation || !postedSigs) {
+    line("SKIP", "PriceFeed.verifyReceipt", !priceFeed ? "PriceFeed is not deployed yet" : !round?.attestation ? "no attestation for this batch in the feed" : "the feed does not carry the posted signatures yet");
   } else {
     const a = round.attestation;
     const tuple = { round: BigInt(a.round), batchIndex: BigInt(a.batchIndex), inboxStart: BigInt(a.inboxStart), inboxEnd: BigInt(a.inboxEnd),
       closeHeight: BigInt(a.closeHeight), closeTime: BigInt(a.closeTime), feedIds: a.feedIds, medians: a.medians.map(BigInt),
       counts: a.counts, reportsRoot: a.reportsRoot as Hex, reportCount: a.reportCount };
-    const ok = (await evmCall(priceFeed, priceFeedAbi, "verifyReceipt", [tuple, hex0x(receipt.stateRoot), BigInt(receipt.transactionCount ?? 0), hex0x(receipt.pqcSignature)])) === true;
-    line(ok ? "PASS" : "FAIL", "PriceFeed.verifyReceipt", `${priceFeed} -> ${ok}`);
+    const ok = (await evmCall(priceFeed, priceFeedAbi, "verifyReceipt", [tuple, anchor.stateRoot, BigInt(anchor.txCount), postedSigs])) === true;
+    line(ok ? "PASS" : "FAIL", "PriceFeed.verifyReceipt", `${priceFeed} -> ${ok}${twoSig ? " (anchorSig ‖ roundSig)" : ""}`);
     const [price, latestRound] = (await evmCall(priceFeed, priceFeedAbi, "latest", [1])) as [bigint, bigint, bigint, number];
     line("PASS", "PriceFeed.latest(fETH)", `round ${latestRound}, price ${price} (8 decimals)`, false);
   }

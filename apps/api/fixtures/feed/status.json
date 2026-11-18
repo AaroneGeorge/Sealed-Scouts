@@ -1,5 +1,5 @@
 {
- "updatedAt": "2026-11-18T20:11:03.760Z",
+ "updatedAt": "2026-11-18T20:27:38.120Z",
  "mode": "observe",
  "rollupId": "sealed-scouts-sim",
  "chainHeight": "2760",
@@ -72,13 +72,13 @@
   {
    "kind": "median",
    "target": "round 4",
-   "at": "2026-11-18T20:11:03.393Z",
+   "at": "2026-11-18T20:27:37.844Z",
    "sent": false
   },
   {
    "kind": "batch",
    "target": "batch 3",
-   "at": "2026-11-18T20:11:03.759Z",
+   "at": "2026-11-18T20:27:38.120Z",
    "sent": false
   }
  ],

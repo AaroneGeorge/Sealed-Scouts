@@ -58,6 +58,9 @@ export interface TowerRound {
   /** Round binding for the on-chain check. Optional until the watchtower writes them. */
   roundHash?: Hex;
   attestation?: AttestationJson;
+  /** Two-signature mode (docs/SPEC.md, Changes 14), and the anchorSig argument as posted to PriceFeed. */
+  twoSig?: boolean;
+  anchorSig?: Hex;
 }
 
 export interface AttackStep {

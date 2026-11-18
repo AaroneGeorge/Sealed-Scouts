@@ -34,6 +34,7 @@ export const priceFeedAbi = [
     outputs: [{ type: "bool" }] },
   { type: "function", name: "latest", stateMutability: "view", inputs: [{ name: "feedId", type: "uint16" }],
     outputs: [{ name: "price", type: "uint128" }, { name: "round", type: "uint64" }, { name: "time", type: "uint64" }, { name: "status", type: "uint8" }] },
+  { type: "function", name: "twoSigMode", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
   { type: "function", name: "readFinal", stateMutability: "view",
     inputs: [{ name: "feedId", type: "uint16" }, { name: "maxAge", type: "uint64" }],
     outputs: [{ name: "price", type: "uint128" }, { name: "round", type: "uint64" }] },

@@ -128,8 +128,8 @@ export function Round({ id, rollupId, priceFeed }: { id: string; rollupId: strin
         <div className="panel-head"><h2>Settlement receipt</h2><span className="hint">The batch that carries this round, checked against the chain</span></div>
         {r.feed ? (
           <VerifyPanel
-            input={{ rollupId, batchIndex: BigInt(r.feed.batchIndex), round: { roundHash: r.roundHash, attestation: r.attestation, priceFeed } }}
-            note={`Batch ${r.feed.batchIndex}. Six receipt checks against chain state, then two that bind this price round: the anchor's slot holds the round hash, and PriceFeed.verifyReceipt agrees.`}
+            input={{ rollupId, batchIndex: BigInt(r.feed.batchIndex), round: { round: BigInt(r.round), roundHash: r.roundHash, attestation: r.attestation, priceFeed, twoSig: r.twoSig, anchorSig: r.anchorSig } }}
+            note={`Batch ${r.feed.batchIndex}. Six receipt checks against chain state, then two that bind this price round: the creator signed the round hash (in the anchor's slot, or as a second signature), and PriceFeed.verifyReceipt agrees.`}
           />
         ) : (
           <p className="muted small">This round has no batch on PriceFeed{r.verdict === "no-quorum" ? ": too few valid reports, so nothing is posted." : " yet."}</p>

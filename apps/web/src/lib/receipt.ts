@@ -22,7 +22,7 @@ const CHECKS: Omit<Check, "state">[] = [
   { id: "creatorAuthority", title: "Creator holds an ML-DSA-87 key", meaning: "pqcKeyStatus on the EVM returns the creator's registered post-quantum key." },
   { id: "chainBinding", title: "Bound to this chain", meaning: "The EVM answers as chain 9800, and the anchor is signed over v2 bytes that name qorechain-diana." },
   { id: "pqcSignature", title: "ML-DSA-87 signature verifies", meaning: "pqcVerify, called on chain, accepts the anchor signature over the rebuilt bytes." },
-  { id: "roundBinding", title: "Anchor covers the price round", meaning: "The anchor's validator_set_hash slot equals this round's hash." },
+  { id: "roundBinding", title: "Creator signed the price round", meaning: "The anchor's validator_set_hash slot holds this round's hash or, in two-signature mode, the creator's separate ML-DSA-87 round signature verifies through pqcVerify." },
   { id: "feedContract", title: "PriceFeed accepts the receipt", meaning: "PriceFeed.verifyReceipt rebuilds the bytes and the round hash itself and checks the signature." },
 ];
 
@@ -30,7 +30,16 @@ export interface VerifyInput {
   rollupId: string;
   batchIndex: bigint;
   /** Round binding: given for our own rounds, absent when checking any rollup's batch. */
-  round?: { roundHash?: Hex; attestation?: AttestationJson; priceFeed: Hex | null };
+  round?: {
+    round: bigint;
+    roundHash?: Hex;
+    attestation?: AttestationJson;
+    priceFeed: Hex | null;
+    /** Two-signature mode (docs/SPEC.md, Changes 14). Unknown: read PriceFeed.twoSigMode(). */
+    twoSig?: boolean;
+    /** The anchorSig argument as posted to PriceFeed: anchorSig, or anchorSig ‖ roundSig in two-signature mode. */
+    anchorSig?: Hex;
+  };
   /** Change one digit in what we rebuild, to show that the same signature then fails. */
   tamper?: boolean;
 }
@@ -53,6 +62,32 @@ interface AnchorRaw {
 }
 
 class CheckFailed extends Error {}
+
+const SIG_HEX = 2 * 4627;
+
+/**
+ * The anchor for one batch. The chain lists a layer's anchors in one response today; follow `next_key` in case it
+ * pages, then fall back to the newest anchor (the batch a reader usually checks).
+ */
+async function findAnchor(rest: VerifyIo["rest"], layerId: string, batchIndex: bigint, root: Hex): Promise<AnchorRaw | undefined> {
+  const hit = (x: AnchorRaw | undefined) => !!x && BigInt(x.layer_height) === batchIndex && wireHex(x.state_root) === root;
+  const base = `/qorechain/multilayer/v1/anchors/${encodeURIComponent(layerId)}`;
+  let key: string | undefined;
+  for (let page = 0; page < 100; page++) {
+    const r = await rest<{ anchors?: AnchorRaw[]; pagination?: { next_key?: string | null } }>(key ? `${base}?pagination.key=${encodeURIComponent(key)}` : base);
+    const found = (r.anchors ?? []).find(hit);
+    if (found) return found;
+    key = r.pagination?.next_key ?? undefined;
+    if (!key) break;
+  }
+  const latest = await rest<{ anchor?: AnchorRaw }>(`/qorechain/multilayer/v1/anchor/${encodeURIComponent(layerId)}`).catch(() => undefined);
+  return hit(latest?.anchor) ? latest!.anchor : undefined;
+}
+
+/** QoreSign bytes of the round signature in two-signature mode (docs/SPEC.md, Changes 14). */
+export function roundSigBytes(rollupId: string, round: bigint, roundHash: Hex): Uint8Array {
+  return new TextEncoder().encode(`qorechain-msg-v1|${CHAIN_ID}|sealed-scouts/round/v1|${rollupId}|${round}|${roundHash.slice(2).toLowerCase()}`);
+}
 /** A check that cannot run yet (for example, a contract not deployed) is skipped, not failed. */
 class NotYet extends Error {}
 
@@ -108,8 +143,7 @@ export async function verifyBatch(input: VerifyInput, io: VerifyIo, onUpdate: (c
       return `Batch ${batchIndex} is ${b.batch.status ?? "stored"} with root ${root}.`;
     });
     await step("anchorOnChain", async () => {
-      const a = await io.rest<{ anchors: AnchorRaw[] }>(`/qorechain/multilayer/v1/anchors/${encodeURIComponent(layerId)}`);
-      anchor = (a.anchors ?? []).find((x) => BigInt(x.layer_height) === batchIndex && wireHex(x.state_root) === root);
+      anchor = await findAnchor(io.rest, layerId, batchIndex, root);
       must(anchor, `no anchor on layer ${layerId} commits batch ${batchIndex} with that root`);
       return `Anchored at main-chain height ${anchor!.main_chain_height}, ${anchor!.transaction_count} transactions.`;
     });
@@ -147,20 +181,38 @@ export async function verifyBatch(input: VerifyInput, io: VerifyIo, onUpdate: (c
       return `pqcVerify returned true for ${message.length} message bytes and a ${(sig.length - 2) / 2}-byte signature.`;
     });
     if (input.round) {
-      const { roundHash, attestation, priceFeed } = input.round;
+      const { round, roundHash, attestation, priceFeed, anchorSig } = input.round;
+      const vsh = wireHex(anchor!.validator_set_hash);
+      const anchorSigOnChain = wireHex(anchor!.pqc_aggregate_signature);
+      let twoSig = input.round.twoSig;
+      if (twoSig === undefined && priceFeed) {
+        twoSig = (await readContract(io.rpc, priceFeed, priceFeedAbi, "twoSigMode", [])).result as boolean;
+      }
       await step("roundBinding", async () => {
         if (!roundHash) throw new NotYet("The feed does not carry this round's hash yet.");
-        const vsh = wireHex(anchor!.validator_set_hash);
-        must(vsh.toLowerCase() === roundHash.toLowerCase(), `anchor slot holds ${vsh === "0x" ? "nothing" : vsh}, round hash is ${roundHash}`);
-        return `validator_set_hash = ${roundHash}.`;
+        if (!twoSig) {
+          must(vsh.toLowerCase() === roundHash.toLowerCase(), `anchor slot holds ${vsh === "0x" ? "nothing" : vsh}, round hash is ${roundHash}`);
+          return `validator_set_hash = ${roundHash}.`;
+        }
+        // Two-signature mode: the slot is empty by design, and the round is signed separately.
+        must(vsh === "0x", `two-signature mode expects an empty anchor slot, found ${vsh}`);
+        if (!anchorSig) throw new NotYet("The feed does not carry the posted signatures yet.");
+        must(anchorSig.length === 2 + 2 * SIG_HEX, `expected anchorSig ‖ roundSig (2 × 4,627 bytes), got ${(anchorSig.length - 2) / 2} bytes`);
+        must(`0x${anchorSig.slice(2, 2 + SIG_HEX)}`.toLowerCase() === anchorSigOnChain.toLowerCase(), "the posted anchor signature is not the one on chain");
+        const message = bytesToHex(roundSigBytes(rollupId, round, roundHash));
+        const { result } = await readContract(io.rpc, PQC_VERIFY, precompileAbi, "pqcVerify", [pubkey, `0x${anchorSig.slice(2 + SIG_HEX)}`, message]);
+        must(result === true, "pqcVerify returned false for the round signature.");
+        return `Two-signature mode: empty anchor slot as expected; pqcVerify returned true for the round signature over round ${round}, hash ${roundHash}.`;
       });
       await step("feedContract", async () => {
         if (!priceFeed || !attestation) throw new NotYet("PriceFeed is not deployed yet, so this check waits.");
+        const sigs = anchorSig ?? (twoSig ? undefined : anchorSigOnChain);
+        if (!sigs) throw new NotYet("The feed does not carry the posted signatures yet.");
         const att = toAbiAttestation(attestation!, input.tamper);
         const { result } = await readContract(io.rpc, priceFeed!, priceFeedAbi, "verifyReceipt",
-          [att, root, BigInt(anchor!.transaction_count), wireHex(anchor!.pqc_aggregate_signature)]);
+          [att, root, BigInt(anchor!.transaction_count), sigs]);
         must(result === true, input.tamper ? "verifyReceipt returned false: one median digit changed." : "verifyReceipt returned false.");
-        return `PriceFeed ${priceFeed} returned true.`;
+        return `PriceFeed ${priceFeed} returned true${twoSig ? " for anchorSig ‖ roundSig" : ""}.`;
       });
     }
     out.valid = true;

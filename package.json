@@ -2,12 +2,25 @@
   "name": "sealed-scouts",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*", "apps/*"],
-  "engines": { "node": ">=22" },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "test": "npm run -ws --if-present test",
     "typecheck": "npm run -ws --if-present typecheck",
-    "test:contracts": "cd contracts && forge test"
+    "test:contracts": "cd contracts && forge test",
+    "scout": "npm run -s -w @sealed-scouts/scout scout --",
+    "watchtower": "npm run -s -w @sealed-scouts/watchtower watchtower --",
+    "demo:stolen-keys": "npm run -s -w @sealed-scouts/attacks demo:stolen-keys --",
+    "demo:evil-median": "npm run -s -w @sealed-scouts/attacks demo:evil-median --",
+    "demo:bad-batch": "npm run -s -w @sealed-scouts/attacks demo:bad-batch --",
+    "redteam": "npm run -s -w @sealed-scouts/attacks redteam --",
+    "launch": "npm run -s -w @sealed-scouts/operator launch --",
+    "receipt": "npm run -s -w @sealed-scouts/operator receipt --"
   },
   "devDependencies": {
     "@types/node": "^22.7.5",

@@ -5,5 +5,21 @@
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "scripts": { "test": "vitest run --passWithNoTests", "typecheck": "tsc --noEmit -p ." }
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit -p .",
+    "demo:stolen-keys": "tsx src/cli.ts stolen-keys",
+    "demo:evil-median": "tsx src/cli.ts evil-median",
+    "demo:bad-batch": "tsx src/cli.ts bad-batch",
+    "redteam": "tsx src/cli.ts redteam"
+  },
+  "dependencies": {
+    "@qorechain/qoresign": "0.2.0",
+    "@qorechain/rdk": "0.9.0",
+    "@sealed-scouts/chain": "*",
+    "@sealed-scouts/core": "*",
+    "@sealed-scouts/scout": "*",
+    "@sealed-scouts/watchtower": "*",
+    "viem": "2.58.0"
+  }
 }

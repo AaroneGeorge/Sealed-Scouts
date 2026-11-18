@@ -1,0 +1,415 @@
+{
+ "recordedAt": "2026-11-18T19:38:35.728Z",
+ "responses": {
+  "https://api.exchange.coinbase.com/products/ETH-USD/ticker": {
+   "ask": "1756.5",
+   "bid": "1756.49",
+   "volume": "129906.74687783",
+   "trade_id": 856389010,
+   "price": "1756.44",
+   "size": "0.41439619",
+   "time": "2026-11-18T19:38:27.788420924Z",
+   "rfq_volume": "515.869950"
+  },
+  "https://api.exchange.coinbase.com/products/BTC-USD/ticker": {
+   "ask": "62698.06",
+   "bid": "62697.99",
+   "volume": "10752.79533241",
+   "trade_id": 1135731657,
+   "price": "62698",
+   "size": "0.12759577",
+   "time": "2026-11-18T19:38:27.682933010Z",
+   "rfq_volume": "71.713626"
+  },
+  "https://api.exchange.coinbase.com/products/USDT-USD/ticker": {
+   "ask": "0.99884",
+   "bid": "0.99883",
+   "volume": "38043340.08",
+   "trade_id": 149993243,
+   "price": "0.99884",
+   "size": "18.49",
+   "time": "2026-11-18T19:38:21.623896014Z"
+  },
+  "https://api.kraken.com/0/public/Ticker?pair=ETHUSD,XBTUSD,USDCUSD,USDTUSD": {
+   "error": [],
+   "result": {
+    "XETHZUSD": {
+     "a": [
+      "1756.44000",
+      "1",
+      "1.000"
+     ],
+     "b": [
+      "1756.43000",
+      "1",
+      "1.000"
+     ],
+     "c": [
+      "1756.43000",
+      "0.56572606"
+     ],
+     "v": [
+      "36424.89114184",
+      "45916.04882253"
+     ],
+     "p": [
+      "1780.80396",
+      "1786.83269"
+     ],
+     "t": [
+      48635,
+      61352
+     ],
+     "l": [
+      "1730.92000",
+      "1730.92000"
+     ],
+     "h": [
+      "1824.36000",
+      "1833.48000"
+     ],
+     "o": "1822.67000"
+    },
+    "USDCUSD": {
+     "a": [
+      "0.99990000",
+      "7681756",
+      "7681756.000"
+     ],
+     "b": [
+      "0.99980000",
+      "1375306",
+      "1375306.000"
+     ],
+     "c": [
+      "0.99980000",
+      "77.04593793"
+     ],
+     "v": [
+      "88368443.24220736",
+      "93415163.54411886"
+     ],
+     "p": [
+      "0.99980957",
+      "0.99980773"
+     ],
+     "t": [
+      14716,
+      16508
+     ],
+     "l": [
+      "0.99970000",
+      "0.99970000"
+     ],
+     "h": [
+      "1.00000000",
+      "1.00000000"
+     ],
+     "o": "0.99980000"
+    },
+    "USDTZUSD": {
+     "a": [
+      "0.99886000",
+      "360438",
+      "360438.000"
+     ],
+     "b": [
+      "0.99885000",
+      "176564",
+      "176564.000"
+     ],
+     "c": [
+      "0.99886000",
+      "53000.00000000"
+     ],
+     "v": [
+      "275298575.93584224",
+      "310237289.09004051"
+     ],
+     "p": [
+      "0.99887036",
+      "0.99886661"
+     ],
+     "t": [
+      26052,
+      30279
+     ],
+     "l": [
+      "0.99864000",
+      "0.99864000"
+     ],
+     "h": [
+      "0.99930000",
+      "0.99930000"
+     ],
+     "o": "0.99891000"
+    },
+    "XXBTZUSD": {
+     "a": [
+      "62717.30000",
+      "2",
+      "2.000"
+     ],
+     "b": [
+      "62717.20000",
+      "1",
+      "1.000"
+     ],
+     "c": [
+      "62717.20000",
+      "0.00006000"
+     ],
+     "v": [
+      "3210.76085342",
+      "4077.89030380"
+     ],
+     "p": [
+      "63501.19233",
+      "63687.76411"
+     ],
+     "t": [
+      130653,
+      164425
+     ],
+     "l": [
+      "62212.70000",
+      "62212.70000"
+     ],
+     "h": [
+      "64928.10000",
+      "65184.10000"
+     ],
+     "o": "64876.90000"
+    }
+   }
+  },
+  "https://api.binance.com/api/v3/ticker/price?symbols=%5B%22ETHUSDT%22%2C%22BTCUSDT%22%2C%22USDCUSDT%22%5D": [
+   {
+    "symbol": "BTCUSDT",
+    "price": "62794.01000000"
+   },
+   {
+    "symbol": "ETHUSDT",
+    "price": "1758.68000000"
+   },
+   {
+    "symbol": "USDCUSDT",
+    "price": "1.00097000"
+   }
+  ],
+  "https://api.bybit.com/v5/market/tickers?category=spot&symbol=ETHUSDT": {
+   "retCode": 0,
+   "retMsg": "OK",
+   "result": {
+    "category": "spot",
+    "list": [
+     {
+      "symbol": "ETHUSDT",
+      "bid1Price": "1758.75",
+      "bid1Size": "2.95646",
+      "ask1Price": "1758.76",
+      "ask1Size": "2.46554",
+      "lastPrice": "1758.78",
+      "prevPrice24h": "1788.75",
+      "price24hPcnt": "-0.0168",
+      "highPrice24h": "1836.15",
+      "lowPrice24h": "1732.65",
+      "turnover24h": "202085645.553107",
+      "volume24h": "112842.25888",
+      "usdIndexPrice": "1756.65779"
+     }
+    ]
+   },
+   "retExtInfo": {},
+   "time": 1795030709661
+  },
+  "https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT": {
+   "retCode": 0,
+   "retMsg": "OK",
+   "result": {
+    "category": "spot",
+    "list": [
+     {
+      "symbol": "BTCUSDT",
+      "bid1Price": "62791.3",
+      "bid1Size": "0.419926",
+      "ask1Price": "62791.4",
+      "ask1Size": "0.726991",
+      "lastPrice": "62791.4",
+      "prevPrice24h": "63705.6",
+      "price24hPcnt": "-0.0144",
+      "highPrice24h": "65266.8",
+      "lowPrice24h": "62274.7",
+      "turnover24h": "890013455.47341166",
+      "volume24h": "13915.308923",
+      "usdIndexPrice": "62717.947133"
+     }
+    ]
+   },
+   "retExtInfo": {},
+   "time": 1795030709800
+  },
+  "https://api.bybit.com/v5/market/tickers?category=spot&symbol=USDCUSDT": {
+   "retCode": 0,
+   "retMsg": "OK",
+   "result": {
+    "category": "spot",
+    "list": [
+     {
+      "symbol": "USDCUSDT",
+      "bid1Price": "1.0009",
+      "bid1Size": "8935334.19",
+      "ask1Price": "1.001",
+      "ask1Size": "12051744.35",
+      "lastPrice": "1.0009",
+      "prevPrice24h": "1.0009",
+      "price24hPcnt": "0",
+      "highPrice24h": "1.0011",
+      "lowPrice24h": "1.0008",
+      "turnover24h": "285956701.726469",
+      "volume24h": "285690695.97",
+      "usdIndexPrice": "0.999841"
+     }
+    ]
+   },
+   "retExtInfo": {},
+   "time": 1795030710246
+  },
+  "https://api.gemini.com/v1/pubticker/btcusd": {
+   "bid": "62696.21000",
+   "ask": "62729.81000",
+   "last": "62660.31000",
+   "volume": {
+    "BTC": "225.75264063",
+    "USD": "14145730.4451943953",
+    "timestamp": 1795030680000
+   }
+  },
+  "https://api.gemini.com/v1/pubticker/ethusd": {
+   "bid": "1756.91000",
+   "ask": "1756.92000",
+   "last": "1754.75000",
+   "volume": {
+    "ETH": "2824.200515",
+    "USD": "4955765.85369625",
+    "timestamp": 1795030680000
+   }
+  },
+  "https://api.gemini.com/v1/pubticker/usdcusd": {
+   "bid": "0.99980",
+   "ask": "0.99983",
+   "last": "0.99980",
+   "volume": {
+    "USD": "1249959.3293727506",
+    "USDC": "1250209.371247",
+    "timestamp": 1795030680000
+   }
+  },
+  "https://api.gemini.com/v1/pubticker/usdtusd": {
+   "bid": "0.99894",
+   "ask": "0.99895",
+   "last": "0.99895",
+   "volume": {
+    "USD": "1815661.64431943715",
+    "USDT": "1817570.092917",
+    "timestamp": 1795030680000
+   }
+  },
+  "https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=ETH-USDT": {
+   "code": "200000",
+   "data": {
+    "time": 1795030712170,
+    "sequence": "24179755006",
+    "price": "1758.55",
+    "size": "0.0769383",
+    "bestBid": "1758.55",
+    "bestBidSize": "4.0619387",
+    "bestAsk": "1758.56",
+    "bestAskSize": "0.0446176"
+   }
+  },
+  "https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=BTC-USDT": {
+   "code": "200000",
+   "data": {
+    "time": 1795030712595,
+    "sequence": "40723235330",
+    "price": "62784.6",
+    "size": "0.00011062",
+    "bestBid": "62784.5",
+    "bestBidSize": "2.4682404",
+    "bestAsk": "62784.6",
+    "bestAskSize": "0.00396938"
+   }
+  },
+  "https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=USDC-USDT": {
+   "code": "200000",
+   "data": {
+    "time": 1795030702200,
+    "sequence": "2537899123",
+    "price": "1.0007",
+    "size": "1013.22",
+    "bestBid": "1.0007",
+    "bestBidSize": "4346641.61",
+    "bestAsk": "1.0008",
+    "bestAskSize": "3691896.41"
+   }
+  },
+  "https://api.gateio.ws/api/v4/spot/tickers?currency_pair=ETH_USDT": [
+   {
+    "currency_pair": "ETH_USDT",
+    "last": "1758.67",
+    "lowest_ask": "1758.67",
+    "lowest_size": "48.352",
+    "highest_bid": "1758.66",
+    "highest_size": "63.0763",
+    "change_percentage": "-1.61",
+    "base_volume": "180258.0556",
+    "quote_volume": "322730077.376203",
+    "high_24h": "1836",
+    "low_24h": "1733"
+   }
+  ],
+  "https://api.gateio.ws/api/v4/spot/tickers?currency_pair=BTC_USDT": [
+   {
+    "currency_pair": "BTC_USDT",
+    "last": "62793.6",
+    "lowest_ask": "62791.7",
+    "lowest_size": "3.479346",
+    "highest_bid": "62791.6",
+    "highest_size": "2.627747",
+    "change_percentage": "-1.39",
+    "base_volume": "13362.436214",
+    "quote_volume": "853536548.4957105",
+    "high_24h": "65265.7",
+    "low_24h": "62280"
+   }
+  ],
+  "https://api.gateio.ws/api/v4/spot/tickers?currency_pair=USDC_USDT": [
+   {
+    "currency_pair": "USDC_USDT",
+    "last": "1.00097",
+    "lowest_ask": "1.00097",
+    "lowest_size": "278559.74",
+    "highest_bid": "1.00096",
+    "highest_size": "137211.26",
+    "change_percentage": "0",
+    "base_volume": "59435640.72",
+    "quote_volume": "59490794.7470983",
+    "high_24h": "1.00104",
+    "low_24h": "1.00078"
+   }
+  ],
+  "https://api.mexc.com/api/v3/ticker/price?symbol=ETHUSDT": {
+   "symbol": "ETHUSDT",
+   "price": "1760.14"
+  },
+  "https://api.mexc.com/api/v3/ticker/price?symbol=BTCUSDT": {
+   "symbol": "BTCUSDT",
+   "price": "62767.14"
+  },
+  "https://api.mexc.com/api/v3/ticker/price?symbol=USDCUSDT": {
+   "symbol": "USDCUSDT",
+   "price": "1.00097"
+  }
+ }
+}

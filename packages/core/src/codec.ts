@@ -139,7 +139,10 @@ export function decodeReportPlaintext(b: Uint8Array): ({ salt: Uint8Array } & Pr
   }
 }
 
-/** QoreSeal purpose for REPORT envelopes of one rollup. */
-export const reportPurpose = (rollupId: string): string => `${COMMITMENT_DOMAIN}|${rollupId}`;
+/**
+ * QoreSeal purpose for REPORT envelopes of one rollup. QoreSeal allows only [A-Za-z0-9._:/-] in a purpose,
+ * so the rollup id is joined with ":" (not "|").
+ */
+export const reportPurpose = (rollupId: string): string => `${COMMITMENT_DOMAIN}:${rollupId}`;
 /** QoreSeal additional data for a REPORT envelope: `<round>|<scout qor1>`. */
 export const reportAad = (round: bigint, scoutQor: string): Uint8Array => utf8(`${round}|${scoutQor}`);

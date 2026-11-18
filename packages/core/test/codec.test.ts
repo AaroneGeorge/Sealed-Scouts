@@ -74,7 +74,7 @@ describe("codec", () => {
     const p = { salt, feedIds: [1, 2], prices: [5n, 6n] };
     expect(decodeReportPlaintext(encodeReportPlaintext(p))).toEqual(p);
     expect(decodeReportPlaintext(encodeReportPlaintext(p).subarray(1))).toBeUndefined();
-    expect(reportPurpose("sealed-scouts-1")).toBe("sealed-scouts/report/v1|sealed-scouts-1");
+    expect(reportPurpose("sealed-scouts-1")).toBe("sealed-scouts/report/v1:sealed-scouts-1");
     expect(new TextDecoder().decode(reportAad(12n, "qor1abc"))).toBe("12|qor1abc");
   });
 });

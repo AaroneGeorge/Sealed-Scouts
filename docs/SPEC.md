@@ -8,7 +8,7 @@ This file is the contract between the packages. Change it only together with eve
 | Kind | Name | Poster | Body |
 |---|---|---|---|
 | 0x01 | JOIN | scout | ledger account id (32 bytes) |
-| 0x02 | REPORT | scout | round u64 · QoreSeal envelope (mode `mlkem`, purpose `sealed-scouts/report/v1|<rollupId>`, aad `round|scout`) |
+| 0x02 | REPORT | scout | round u64 · QoreSeal envelope (mode `mlkem`, purpose `sealed-scouts/report/v1:<rollupId>`, aad `round|scout`) |
 | 0x03 | COMMIT | scout | round u64 · commitment (32) · ML-DSA-87 signature (4,627) |
 | 0x04 | OPEN | operator | round u64 · count u8 · count × (scout20 · salt16 · n u8 · n × (feedId u16 · price u128)) |
 | 0x05 | REVEAL | scout | round u64 · salt16 · n u8 · n × (feedId u16 · price u128) |
@@ -109,3 +109,10 @@ Additive clarifications. Each one pins down a detail the text above left open; n
     counted only through their own REVEAL, the public record of the operator's skips, limit L4).
 12. Test vectors for Solidity live in `fixtures/vectors/*.json`; fixture rounds in `fixtures/rounds/*.json` with
     TEST-ONLY keys in `fixtures/scouts.json`. Regenerate with `npm run vectors|fixtures -w @sealed-scouts/core`.
+
+**2026-11-19 (coordinator).**
+
+12. REPORT seal purpose is `sealed-scouts/report/v1:<rollupId>` (colon). QoreSeal 0.1.0 accepts only
+    `[A-Za-z0-9._:/-]{1,128}` in a purpose, so `|` is refused. The aad is unchanged.
+13. `roundHash` domain is final as in item 1: `chainId` is the EVM chain id as `uint256` (`block.chainid`), not the
+    native chain id string. Contracts and TypeScript both follow this; the vectors in `fixtures/vectors/` are the reference.

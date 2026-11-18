@@ -34,9 +34,9 @@ function setup(readPrices = async () => reading) {
     config: { chainId: CHAIN_ID, rollupId: ROLLUP_ID, operator, timing },
     signer, chain, readPrices, openerKemKey: async () => opener.mlkemPublicKey, log: () => {},
   });
-  const asOperator = (payload: Uint8Array) => {
+  const asOperator = (payload: Uint8Array, height = roundWindows(0n, timing).commitEnd + 1n) => {
     poster = operator;
-    chain.inbox.push({ seq: BigInt(chain.inbox.length + 1), height: 0n, poster: operator, payload });
+    chain.inbox.push({ seq: BigInt(chain.inbox.length + 1), height, poster: operator, payload });
     poster = signer.address;
   };
   return { scout, chain, signer, asOperator };
@@ -87,6 +87,17 @@ describe("Scout.tick", () => {
     chain.setHeight(w.openEnd + 1n);
     await scout.tick();
     expect(kinds(chain.inbox)).toEqual(["REPORT", "COMMIT", "OPEN"]);
+  });
+
+  it("an OPEN that lands after the open window does not count: the scout still reveals", async () => {
+    const { scout, chain, asOperator } = setup();
+    chain.setHeight(w.start + 3n);
+    const posted = (await scout.report(0n))!;
+    const opening = { scout: posted.sealed.scout20, salt: posted.sealed.salt, ...posted.sealed.prices };
+    asOperator(encodeMsg({ kind: "OPEN", round: 0n, openings: [opening] }), w.openEnd);
+    chain.setHeight(w.openEnd + 1n);
+    await scout.tick();
+    expect(kinds(chain.inbox).at(-1)).toBe("REVEAL");
   });
 
   it("an OPEN with the wrong salt does not count as opening our report", async () => {

@@ -2,11 +2,12 @@
 //   npm run watchtower -- --observe [--once]                  replay the live rollup with no key, write the feed
 //   npm run watchtower -- --observe --fixture demo --once     same, on the simulated demo history (or a recorded JSON file)
 //   npm run watchtower -- --active                            also challenge (needs SS_TOWER_MNEMONIC)
+//   --demo (or SS_DEMO=1): demo round timing, as the operator runs it
 //   --feed-dir <dir> (default repo/feed, or SS_FEED_DIR)   --interval-ms <ms> (default 15000)
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { chain as defaultChain, loadAccount } from "@sealed-scouts/chain";
-import { loadDeployment } from "@sealed-scouts/scout";
+import { demoFromEnv, loadDeployment } from "@sealed-scouts/scout";
 import { DEFAULT_FEED_DIR, FeedWriter } from "./feed.js";
 import { liveChallenger, liveSource, towerConfigFrom } from "./live.js";
 import { buildDemoWorld } from "./scenario.js";
@@ -17,6 +18,7 @@ import { Watchtower, type TowerConfig } from "./tower.js";
 const { values } = parseArgs({
   options: {
     observe: { type: "boolean", default: false },
+    demo: { type: "boolean", default: demoFromEnv() },
     active: { type: "boolean", default: false },
     fixture: { type: "string" },
     once: { type: "boolean", default: false },
@@ -38,7 +40,7 @@ if (fixture) {
 } else {
   const d = loadDeployment();
   if (!d) throw new Error("deployments/diana.json is missing: the rollup is not launched yet (try --fixture)");
-  cfg = towerConfigFrom(d);
+  cfg = towerConfigFrom(d, values.demo!);
   source = liveSource(defaultChain(), d);
   if (values.active) challenger = liveChallenger(defaultChain(), await loadAccount("TOWER"), d.rollupId, d.priceFeed);
 }

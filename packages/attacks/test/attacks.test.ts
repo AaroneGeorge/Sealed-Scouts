@@ -7,7 +7,7 @@ import { badBatchDryRun } from "../src/bad-batch.js";
 import { BOND, CourtRevert, SimCourt } from "../src/court.js";
 import { evilMedianDryRun } from "../src/evil-median.js";
 import { recordClaims, type Step } from "../src/evidence.js";
-import { stolenKeysDryRun } from "../src/stolen-keys.js";
+import { nativeVerdict, postRoundVerdict, stolenKeysDryRun, windowVerdict } from "../src/stolen-keys.js";
 
 const refusedAll = (steps: { verdict: string }[]) => steps.filter((s) => s.verdict !== "ACCEPTED").every((s) => s.verdict === "REFUSED");
 
@@ -69,5 +69,24 @@ describe("recordClaims", () => {
     const file = JSON.parse(readFileSync(path, "utf8"));
     expect(file.claims["rollup-created"]).toEqual({ tx: "AA", layer: "native" });
     expect(file.claims["chain-fraud-slash"]).toMatchObject({ tx: "CC", layer: "native", note: "bad-batch: challenge" });
+  });
+});
+
+describe("live stolen-keys counts only the expected refusal", () => {
+  it("native: the PQ check refuses; any other failure is an ERROR", () => {
+    expect(nativeVerdict({ code: 7, codespace: "pqc", rawLog: "missing signature" })).toBe("REFUSED");
+    expect(nativeVerdict({ code: 4, codespace: "sdk", rawLog: "unauthorized: PQC hybrid signature verification failed" })).toBe("REFUSED");
+    expect(nativeVerdict({ code: 5, codespace: "sdk", rawLog: "insufficient funds" })).toBe("ERROR");
+    expect(nativeVerdict({ code: 0, codespace: "", rawLog: "" })).toBe("NOT REFUSED");
+  });
+  it("postRound: only BadSignature is the ML-DSA check", () => {
+    expect(postRoundVerdict("BadSignature")).toBe("REFUSED");
+    expect(postRoundVerdict("StaleRound")).toBe("ERROR");
+    expect(postRoundVerdict("OperatorNotBonded")).toBe("ERROR");
+    expect(postRoundVerdict(undefined)).toBe("NOT REFUSED");
+  });
+  it("EVM lane: only 'no open EVM authorisation window' counts", () => {
+    expect(windowVerdict(new Error("rpc error: no open EVM authorisation window"))).toBe("REFUSED");
+    expect(windowVerdict(new Error("nonce too low"))).toBe("ERROR");
   });
 });

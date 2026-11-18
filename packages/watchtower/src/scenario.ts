@@ -1,10 +1,13 @@
 // The standard simulated history behind `watchtower --fixture` and the attack dry runs:
 // six rounds of five scouts, one skipped report revealed by its scout, one outlier, one wrong median posted
 // to the feed, reward payments, and one batch per round, plus one ledger batch with a wrong root.
-import { deriveRound, roundWindows, scoutAddress, toAttestation, type RoundAttestation, type RoundResult } from "@sealed-scouts/core";
+import { pqSign } from "@qorechain/qoresign";
+import {
+  anchorSignBytes, deriveRound, roundHash, roundWindows, scoutAddress, toAttestation, toHex, type RoundAttestation, type RoundResult,
+} from "@sealed-scouts/core";
 import { ledgerKeyOf } from "@sealed-scouts/scout";
 import { feedRoundFromAttestation, type FeedRound } from "./rounds.js";
-import { SimRollup } from "./sim.js";
+import { SIM_EVM_CHAIN_ID, SimRollup } from "./sim.js";
 
 const E8 = 100_000_000n;
 const BASE = { 1: 1_754n * E8, 2: 62_570n * E8, 3: 99_930_000n } as const;
@@ -56,7 +59,12 @@ export function buildDemoWorld(): DemoWorld {
     const batch = { index: BigInt(b.batchIndex), inboxStart: BigInt(b.inboxStart), inboxEnd: BigInt(b.inboxEnd), closeTime: blockTime(roundWindows(round, sim.params).commitEnd) };
     let att: RoundAttestation = toAttestation(result, batch);
     if (round === wrongMedianRound) att = { ...att, medians: att.medians.map((m, i) => (i === 0 ? 1n * E8 : m)) }; // fETH = $1, signed as such
-    sim.feedRounds.set(round, feedRoundFromAttestation(att, round >= 4n ? "pending" : "final"));
+    // The operator signs the anchor over the round hash of what it posts, the lie included.
+    const stateRoot = `0x${b.stateRoot.replace(/^0x/, "")}` as const;
+    const txCount = BigInt(b.inboxEnd - b.inboxStart);
+    const vsh = roundHash(att, { chainId: SIM_EVM_CHAIN_ID, rollupId: sim.params.rollupId });
+    const anchorSig = toHex(pqSign(sim.operator.keys.pqc.secretKey, anchorSignBytes({ chainId: sim.params.chainId, layerId: sim.params.rollupId, batchIndex: att.batchIndex, stateRoot, validatorSetHash: vsh, txCount })));
+    sim.feedRounds.set(round, { ...feedRoundFromAttestation(att, round >= 4n ? "pending" : "final"), anchor: { stateRoot, txCount, anchorSig }, twoSig: false });
   }
   return { sim, wrongMedianRound, fraudBatch };
 }

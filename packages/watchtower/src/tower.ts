@@ -165,7 +165,7 @@ export class Watchtower {
 
 function roundJson(c: RoundCheck, challenges: Challenge[], domain: Parameters<typeof roundHash>[1]) {
   const d = c.derived;
-  const { attestation, ...feed } = c.feed ?? {};
+  const { attestation, anchor, twoSig, ...feed } = c.feed ?? {};
   return {
     round: c.round,
     verdict: c.verdict,
@@ -184,5 +184,7 @@ function roundJson(c: RoundCheck, challenges: Challenge[], domain: Parameters<ty
     challenges,
     // What the operator posted and the anchor of batch `attestation.batchIndex` signs (validator_set_hash slot).
     ...(attestation ? { attestation, roundHash: roundHash(attestation, domain) } : {}),
+    // postRound's other arguments, so anyone can repeat PriceFeed.verifyReceipt(attestation, stateRoot, txCount, anchorSig).
+    ...(anchor ? { twoSig: twoSig ?? false, stateRoot: anchor.stateRoot, txCount: anchor.txCount, anchorSig: anchor.anchorSig } : {}),
   };
 }

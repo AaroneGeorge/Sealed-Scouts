@@ -15,6 +15,10 @@ export interface FeedRound {
   batchIndex: bigint;
   /** The attestation the operator posted (its hash is what the anchor signs). Medians above may be the court's. */
   attestation?: RoundAttestation;
+  /** What postRound carried besides the attestation (RoundPosted event): enough to call verifyReceipt again. */
+  anchor?: { stateRoot: `0x${string}`; txCount: bigint; anchorSig: `0x${string}` };
+  /** PriceFeed.twoSigMode(): anchorSig is then the anchor signature followed by the round signature. */
+  twoSig?: boolean;
 }
 
 /** A feed round exactly as an attestation posts it. */

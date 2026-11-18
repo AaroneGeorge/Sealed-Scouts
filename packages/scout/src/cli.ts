@@ -8,7 +8,7 @@ import { generateMnemonic } from "@qorechain/sdk";
 import { generateSealKeys, open } from "@qorechain/qoreseal";
 import { decodeMsg, decodeReportPlaintext, phaseOf, reportAad, reportPurpose, toHex, verifyCommit } from "@sealed-scouts/core";
 import { accountFromMnemonic, chain as defaultChain, loadAccount, mnemonicEnvName } from "@sealed-scouts/chain";
-import { loadDeployment, type Deployment } from "./deployment.js";
+import { demoFromEnv, loadDeployment, timingOf, type Deployment } from "./deployment.js";
 import { joinPayload, ledgerKeyOf, nextNonce, withdrawalPayload } from "./ledger.js";
 import { assertBonded, liveScoutChain, registeredKemKey } from "./live.js";
 import { formatE8, politeGetJson, readPrices } from "./prices/index.js";
@@ -21,7 +21,7 @@ const { values, positionals } = parseArgs({
   options: {
     role: { type: "string", default: "SCOUT1" },
     once: { type: "boolean", default: false },
-    demo: { type: "boolean", default: false },
+    demo: { type: "boolean", default: demoFromEnv() },
     "dry-run": { type: "boolean", default: false },
     amount: { type: "string" },
     to: { type: "string" },
@@ -87,7 +87,7 @@ async function run(): Promise<void> {
   const d = needDeployment();
   const account = await loadAccount(role);
   const chain = defaultChain();
-  const timing = values.demo ? (d.demoTiming ?? d.timing) : d.timing;
+  const timing = timingOf(d, values.demo!);
   await assertBonded(chain, account, d.priceFeed, d.scouts);
   const scout = new Scout({
     config: { chainId: d.chainId, rollupId: d.rollupId, operator: d.operator, timing },

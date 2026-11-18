@@ -66,13 +66,17 @@ export class Scout {
     return { sealed, tx };
   }
 
-  /** True when an OPEN from the operator, or our own REVEAL, already discloses this report. */
+  /**
+   * True when an OPEN from the operator, or our own REVEAL, already discloses this report. Only what deriveRound
+   * counts: an OPEN inside the open window, or our REVEAL inside the reveal window.
+   */
   disclosed(entries: InboxEntry[], sealed: SealedReport): boolean {
+    const w = roundWindows(sealed.round, this.d.config.timing);
     return entries.some((e) => {
       const m = decodeMsg(e.payload);
-      if (!m || m.kind === "JOIN" || m.round !== sealed.round) return false;
-      if (m.kind === "REVEAL") return e.poster === this.d.signer.address;
-      if (m.kind !== "OPEN" || e.poster !== this.d.config.operator) return false;
+      if (!m || m.kind === "JOIN" || m.round !== sealed.round || e.height < w.commitEnd) return false;
+      if (m.kind === "REVEAL") return e.poster === this.d.signer.address && e.height < w.revealEnd;
+      if (m.kind !== "OPEN" || e.poster !== this.d.config.operator || e.height >= w.openEnd) return false;
       return m.openings.some((o) => o.scout.toLowerCase() === sealed.scout20 && bytesEqual(commitment(sealed.round, sealed.scout20, o.salt, o), sealed.commitment));
     });
   }

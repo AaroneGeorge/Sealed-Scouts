@@ -58,6 +58,14 @@ export function parseDeployment(j: J): Deployment {
   };
 }
 
+/** Round timing for normal or demo rounds. Every replayer must pick the same one as the operator. */
+export function timingOf(d: Deployment, demo: boolean): RoundTiming {
+  return demo ? (d.demoTiming ?? d.timing) : d.timing;
+}
+
+/** Demo rounds are on with --demo or SS_DEMO=1. */
+export const demoFromEnv = (env: NodeJS.ProcessEnv = process.env): boolean => env.SS_DEMO === "1" || env.SS_DEMO === "true";
+
 /** The deployment, or undefined before the rollup exists. */
 export function loadDeployment(path = process.env.SS_DEPLOYMENT ?? DEFAULT_DEPLOYMENT_PATH): Deployment | undefined {
   return existsSync(path) ? parseDeployment(JSON.parse(readFileSync(path, "utf8"))) : undefined;

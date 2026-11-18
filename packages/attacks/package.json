@@ -14,6 +14,7 @@
     "redteam": "tsx src/cli.ts redteam"
   },
   "dependencies": {
+    "@qorechain/evm": "0.14.0",
     "@qorechain/qoresign": "0.2.0",
     "@qorechain/rdk": "0.9.0",
     "@sealed-scouts/chain": "*",

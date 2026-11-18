@@ -40,7 +40,7 @@ export async function badBatchDryRun(): Promise<Step[]> {
   return steps;
 }
 
-export async function badBatchLive(opts: { bond?: boolean; chain?: Chain } = {}): Promise<Step[]> {
+export async function badBatchLive(opts: { bond?: boolean; demo?: boolean; chain?: Chain } = {}): Promise<Step[]> {
   const chain = opts.chain ?? defaultChain();
   const d = needDeployment();
   const rest = chain.inbox.rest;
@@ -67,7 +67,7 @@ export async function badBatchLive(opts: { bond?: boolean; chain?: Chain } = {})
 
   const tower = await loadAccount("TOWER");
   const watchtower = new Watchtower(
-    towerConfigFrom(d),
+    towerConfigFrom(d, opts.demo ?? false),
     source, new FeedWriter(feedDir()), liveChallenger(chain, tower, d.rollupId, d.priceFeed),
   );
   await watchtower.sync();

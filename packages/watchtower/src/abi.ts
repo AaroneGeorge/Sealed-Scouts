@@ -10,6 +10,8 @@ export const PRICE_FEED_ABI = parseAbi([
   "function roundFeeds(uint64 round) view returns (uint16[])",
   "function points(uint64 round, uint16 feedId) view returns (uint128 price, uint8 count, bool listed)",
   "function status(uint64 round) view returns (uint8)",
+  "function twoSigMode() view returns (bool)",
+  "function cursor() view returns (uint64 lastRound, uint64 lastBatchIndex, bool started)",
   `function challengeMedian(uint64 round, ${LEAF}[] leaves)`,
   `function postRound(${ATTESTATION} att, bytes32 stateRoot, uint64 txCount, bytes anchorSig)`,
   `function verifyReceipt(${ATTESTATION} att, bytes32 stateRoot, uint64 txCount, bytes anchorSig) view returns (bool)`,

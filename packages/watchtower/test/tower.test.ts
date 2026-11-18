@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { checkQledgerFraud } from "@qorechain/rdk";
-import { attestationFromJson, reportsRoot, roundHash, type Leaf } from "@sealed-scouts/core";
+import { pqVerify } from "@qorechain/qoresign";
+import { anchorSignBytes, attestationFromJson, fromHex, reportsRoot, roundHash, type Leaf } from "@sealed-scouts/core";
 import { FeedWriter } from "../src/feed.js";
 import { buildDemoWorld } from "../src/scenario.js";
 import { simTowerConfig, sourceFromJson } from "../src/sim.js";
@@ -58,6 +59,10 @@ describe("Watchtower on the simulated demo history", () => {
       expect(f.roundHash).toBe(roundHash(posted, { chainId: 9800n, rollupId: sim.params.rollupId }));
       expect(f.attestation.batchIndex).toBe(f.feed.batchIndex);
       expect(f.feed.attestation).toBeUndefined();
+      // postRound's other arguments are there too, and the anchor signature covers this round hash.
+      expect(f.twoSig).toBe(false);
+      const anchor = anchorSignBytes({ chainId: sim.params.chainId, layerId: sim.params.rollupId, batchIndex: posted.batchIndex, stateRoot: f.stateRoot, validatorSetHash: f.roundHash, txCount: BigInt(f.txCount) });
+      expect(pqVerify(sim.operator.keys.pqc.publicKey, anchor, fromHex(f.anchorSig))).toBe(true);
       const b = sim.batches[Number(posted.batchIndex)]!;
       expect([BigInt(b.inboxStart), BigInt(b.inboxEnd), b.status]).toEqual([posted.inboxStart, posted.inboxEnd, "submitted"]);
       if (round > 0n) expect(posted.batchIndex).toBeGreaterThan(sim.feedRounds.get(round - 1n)!.batchIndex); // one round per batch

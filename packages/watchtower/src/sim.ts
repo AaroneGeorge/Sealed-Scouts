@@ -27,7 +27,8 @@ export function simIdentity(label: string): SimIdentity {
 }
 
 /** Tower settings for a simulation: no eligibility list, testnet EVM chain id. */
-export const simTowerConfig = (params: TowerConfig["params"]): TowerConfig => ({ params, scouts: [], evmChainId: 9800n });
+export const SIM_EVM_CHAIN_ID = 9800n;
+export const simTowerConfig = (params: TowerConfig["params"]): TowerConfig => ({ params, scouts: [], evmChainId: SIM_EVM_CHAIN_ID });
 
 export const SIM_TIMING = { genesisHeight: 1000n, roundBlocks: 300n, commitBlocks: 180n, openBlocks: 40n, revealBlocks: 40n };
 
@@ -170,7 +171,11 @@ export function sourceFromJson(j: Record<string, any>): { params: Omit<RoundPara
   };
   const entries: InboxEntry[] = j.entries.map(entryFromJson);
   const feed = new Map<string, FeedRound>(
-    Object.entries(j.feedRounds as Record<string, any>).map(([r, f]) => [r, { ...f, medians: f.medians.map(BigInt), batchIndex: BigInt(f.batchIndex), attestation: f.attestation && attestationFromJson(f.attestation) }]),
+    Object.entries(j.feedRounds as Record<string, any>).map(([r, f]) => [r, {
+      ...f, medians: f.medians.map(BigInt), batchIndex: BigInt(f.batchIndex),
+      attestation: f.attestation && attestationFromJson(f.attestation),
+      anchor: f.anchor && { ...f.anchor, txCount: BigInt(f.anchor.txCount) },
+    }]),
   );
   return {
     params,

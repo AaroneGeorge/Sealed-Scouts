@@ -7,8 +7,11 @@ export type Where = "chain" | "rollup" | "evm" | "local check" | "simulation";
 export interface Step {
   attack: string;
   step: string;
-  /** REFUSED: the attack did not get through. ACCEPTED: an expected, harmless acceptance (a setup step). */
-  verdict: "REFUSED" | "NOT REFUSED" | "ACCEPTED";
+  /**
+   * REFUSED: stopped by the defence the step is about (the expected refusal, nothing else). NOT REFUSED: it got
+   * through. ERROR: it failed for some other reason, so it proves nothing. ACCEPTED: an expected setup step.
+   */
+  verdict: "REFUSED" | "NOT REFUSED" | "ERROR" | "ACCEPTED";
   where: Where;
   evidence: Record<string, string | number | boolean>;
   /** The PROOF.md claim this step proves (ids in apps/api/scripts/proof.ts), with the evidence key holding its tx. */

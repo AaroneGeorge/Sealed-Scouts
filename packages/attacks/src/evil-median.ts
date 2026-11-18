@@ -52,13 +52,13 @@ export async function evilMedianDryRun(): Promise<Step[]> {
  * Live: the operator loop must post one wrong round (see the operator's lie switch). This waits for a round whose
  * feed median differs from the replay, lets the active watchtower challenge it, and records the court's answer.
  */
-export async function evilMedianLive(opts: { timeoutMs?: number; chain?: Chain } = {}): Promise<Step[]> {
+export async function evilMedianLive(opts: { timeoutMs?: number; demo?: boolean; chain?: Chain } = {}): Promise<Step[]> {
   const chain = opts.chain ?? defaultChain();
   const d = needDeployment();
   if (!d.priceFeed) throw new Error("no PriceFeed address in the deployment");
   const tower = await loadAccount("TOWER");
   const watchtower = new Watchtower(
-    towerConfigFrom(d),
+    towerConfigFrom(d, opts.demo ?? false),
     liveSource(chain, d), new FeedWriter(mkdtempSync(join(tmpdir(), "ss-evil-"))), liveChallenger(chain, tower, d.rollupId, d.priceFeed),
   );
   const deadline = Date.now() + (opts.timeoutMs ?? 30 * 60_000);

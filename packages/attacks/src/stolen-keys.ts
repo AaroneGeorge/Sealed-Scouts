@@ -1,12 +1,13 @@
 // Q-Day attack: the attacker has recovered the classical secp256k1 keys of three scouts (enough to own the
 // median of five) but not their ML-DSA-87 keys. Every way it tries to push fETH = $1 is refused.
+import { classifyEvmWindowRejection } from "@qorechain/evm/window";
 import { pqSign, pqVerify, signPqLayer, verifyPqLayer } from "@qorechain/qoresign";
 import { postRollupDataMsg } from "@qorechain/rdk";
 import {
   REJECT, anchorSignBytes, deriveRound, phaseOf, roundHash, roundWindows, toAttestation, type InboxEntry, type RoundParams,
 } from "@sealed-scouts/core";
 import { ScoutEligibility, chain as defaultChain, loadAccount, registry, wrapAccount, type Chain } from "@sealed-scouts/chain";
-import { loadDeployment, registeredKemKey, type Deployment } from "@sealed-scouts/scout";
+import { loadDeployment, registeredKemKey, timingOf, type Deployment } from "@sealed-scouts/scout";
 import { PRICE_FEED_ABI, SimRollup, simIdentity } from "@sealed-scouts/watchtower";
 import { randomBytes } from "node:crypto";
 import { createWalletClient, http } from "viem";
@@ -18,10 +19,10 @@ const A = "stolen-keys";
 const VICTIMS = ["SCOUT1", "SCOUT2", "SCOUT3"] as const;
 
 /** The anchor bytes the feed checks, for a forged round claiming fETH = $1. */
-function forgedAnchor(chainId: string, rollupId: string, evmChainId: bigint, round: bigint) {
+function forgedAnchor(chainId: string, rollupId: string, evmChainId: bigint, round: bigint, batchIndex: bigint) {
   const att = toAttestation(
     { round, status: "ok", leaves: [], medians: [{ feedId: 1, price: ONE_DOLLAR, count: 3 }], reportsRoot: `0x${"00".repeat(32)}`, outliers: [], inBand: [], rejected: [], skippedByOpener: [], openHeight: 0n, closeHeight: 0n },
-    { index: 1n, inboxStart: 0n, inboxEnd: 1n, closeTime: 1n },
+    { index: batchIndex, inboxStart: 0n, inboxEnd: 1n, closeTime: 1n },
   );
   const stateRoot = `0x${"00".repeat(32)}` as const;
   const bytes = anchorSignBytes({ chainId, layerId: rollupId, batchIndex: att.batchIndex, stateRoot, validatorSetHash: roundHash(att, { chainId: evmChainId, rollupId }), txCount: 1n });
@@ -63,7 +64,7 @@ export async function stolenKeysDryRun(): Promise<Step[]> {
   }
 
   const operator = sim.operator;
-  const { bytes } = forgedAnchor(chainId, rollupId, 9800n, 1n);
+  const { bytes } = forgedAnchor(chainId, rollupId, 9800n, 1n, 1n);
   const random = new Uint8Array(randomBytes(4627));
   const attackerSig = pqSign(attacker.keys.pqc.secretKey, bytes);
   for (const [what, sig] of [["a random signature", random], ["the attacker's ML-DSA-87 signature", attackerSig]] as const) {
@@ -73,12 +74,31 @@ export async function stolenKeysDryRun(): Promise<Step[]> {
   return steps;
 }
 
-export async function stolenKeysLive(chain: Chain = defaultChain()): Promise<Step[]> {
+/** The chain's answer to a missing or foreign ML-DSA-87 layer: codespace pqc, or a log naming the PQ check. */
+const PQ_LOG = /post-quantum|\bpqc?\b|hybrid|ml-dsa|dilithium/i;
+export function nativeVerdict(r: { code: number; codespace: string; rawLog: string }): Step["verdict"] {
+  if (r.code === 0) return "NOT REFUSED";
+  return r.codespace === "pqc" || PQ_LOG.test(r.rawLog) ? "REFUSED" : "ERROR";
+}
+
+/** Only PriceFeed's ML-DSA-87 check counts; any other revert (stale round, unbonded operator) proves nothing. */
+export function postRoundVerdict(revert: string | undefined): Step["verdict"] {
+  return revert === undefined ? "NOT REFUSED" : revert === "BadSignature" ? "REFUSED" : "ERROR";
+}
+
+/** Only the EVM lane's "no open EVM authorisation window" counts. */
+export function windowVerdict(e: unknown): Step["verdict"] {
+  return classifyEvmWindowRejection(e) === "no-window" ? "REFUSED" : "ERROR";
+}
+
+export async function stolenKeysLive(opts: { demo?: boolean; chain?: Chain } = {}): Promise<Step[]> {
+  const chain = opts.chain ?? defaultChain();
   const d = needDeployment();
+  const timing = timingOf(d, opts.demo ?? false);
   const attacker = await loadAccount("ATTACKER");
   const opener = await registeredKemKey(chain, d.operator);
   const height = BigInt(await chain.inbox.rest.getLatestHeight());
-  const { round } = phaseOf(height, d.timing);
+  const { round } = phaseOf(height, timing);
   const steps: Step[] = [];
   const GAS = 900_000; // fixed, so nothing is simulated first: the chain itself answers
 
@@ -89,8 +109,13 @@ export async function stolenKeysLive(chain: Chain = defaultChain()): Promise<Ste
     const forged = forgedReport({ chainId: d.chainId, rollupId: d.rollupId, round, victim: victim.address, attackerPq: attacker.keys, openerKemKey: opener });
     const msgs = [forged.report, forged.commit].map((data) => postRollupDataMsg({ poster: victim.address, rollupId: d.rollupId, data }));
     for (const [mode, label] of [["classical", "secp256k1 only"], ["hybrid", "attacker's ML-DSA-87 layer"]] as const) {
-      const r = await chain.native.send(stolen, msgs, { mode, gas: GAS }).catch((e) => ({ code: -1, codespace: "client", rawLog: String(e), txHash: "", height: 0n }));
-      steps.push({ attack: A, step: `${role}: post $1 report, ${label}`, verdict: r.code === 0 ? "NOT REFUSED" : "REFUSED", where: "chain", evidence: { code: r.code, codespace: r.codespace, txHash: r.txHash, log: r.rawLog.slice(0, 160) } });
+      const step = `${role}: post $1 report, ${label}`;
+      try {
+        const r = await chain.native.send(stolen, msgs, { mode, gas: GAS });
+        steps.push({ attack: A, step, verdict: nativeVerdict(r), where: "chain", evidence: { code: r.code, codespace: r.codespace, txHash: r.txHash, log: r.rawLog.slice(0, 160) } });
+      } catch (e) {
+        steps.push({ attack: A, step, verdict: "ERROR", where: "chain", evidence: errorEvidence(e) });
+      }
     }
   }
 
@@ -98,37 +123,46 @@ export async function stolenKeysLive(chain: Chain = defaultChain()): Promise<Ste
   const own = forgedReport({ chainId: d.chainId, rollupId: d.rollupId, round, victim: attacker.address, attackerPq: attacker.keys, openerKemKey: opener });
   const posted = await chain.native.postToInbox(attacker, [own.report, own.commit], d.rollupId).catch((e) => e as Error);
   if (posted instanceof Error) {
-    steps.push({ attack: A, step: "ATTACKER: post $1 report from its own account", verdict: "REFUSED", where: "chain", evidence: errorEvidence(posted) });
+    steps.push({ attack: A, step: "ATTACKER: post $1 report from its own account", verdict: "ERROR", where: "chain", evidence: errorEvidence(posted) });
   } else {
     const entries: InboxEntry[] = posted.sequences.map((seq, i) => ({ seq, height: posted.height, poster: attacker.address, payload: [own.report, own.commit][i]! }));
     const pq = new Map([[attacker.address, attacker.keys.pqc.publicKey]]);
     // The operator's eligibility rule, read at the round's close (or now, if the round is still open).
     const eligibility = new ScoutEligibility(chain.evm.publicClient, d.scouts, d.priceFeed);
-    const closeHeight = roundWindows(round, d.timing).commitEnd;
+    const closeHeight = roundWindows(round, timing).commitEnd;
     await eligibility.snapshot(round, closeHeight < posted.height ? closeHeight : posted.height);
-    const result = deriveRound(entries, round, { ...d.timing, ...d.rules, chainId: d.chainId, rollupId: d.rollupId, operator: d.operator, pqKeyOf: (s) => pq.get(s) }, eligibility.eligible);
+    const result = deriveRound(entries, round, { ...timing, ...d.rules, chainId: d.chainId, rollupId: d.rollupId, operator: d.operator, pqKeyOf: (s) => pq.get(s) }, eligibility.eligible);
     const reason = result.rejected.find((r) => r.scout === attacker.address)?.reason ?? "counted";
     steps.push({ attack: A, step: "ATTACKER: post $1 report from its own account", verdict: reason === REJECT.notEligible ? "REFUSED" : "NOT REFUSED", where: "rollup", evidence: { txHash: posted.txHash, deriveRound: reason } });
   }
 
   if (d.priceFeed) {
-    const { att, stateRoot } = forgedAnchor(d.chainId, d.rollupId, BigInt(d.evmChainId), round);
+    const pc = chain.evm.publicClient;
+    const feed = { address: d.priceFeed, abi: PRICE_FEED_ABI } as const;
+    // The next round and batch the feed would take, so the attestation passes every check before the signature.
+    const [lastRound, lastBatchIndex, started] = await pc.readContract({ ...feed, functionName: "cursor" });
+    const twoSig = await pc.readContract({ ...feed, functionName: "twoSigMode" });
+    const { att, stateRoot } = forgedAnchor(d.chainId, d.rollupId, BigInt(d.evmChainId), started ? lastRound + 1n : round, started ? lastBatchIndex + 1n : 1n);
+    const sig = `0x${Buffer.from(randomBytes((twoSig ? 2 : 1) * 4627)).toString("hex")}` as const;
+    const step = `forged $1 round ${att.round} (batch ${att.batchIndex}) at PriceFeed.postRound`;
     try {
-      await chain.evm.publicClient.simulateContract({ address: d.priceFeed, abi: PRICE_FEED_ABI, functionName: "postRound", args: [att, stateRoot, 1n, `0x${Buffer.from(randomBytes(4627)).toString("hex")}`], account: attacker.evm });
-      steps.push({ attack: A, step: "forged $1 round at PriceFeed.postRound", verdict: "NOT REFUSED", where: "evm", evidence: {} });
+      await pc.simulateContract({ ...feed, functionName: "postRound", args: [att, stateRoot, 1n, sig], account: attacker.evm });
+      steps.push({ attack: A, step, verdict: "NOT REFUSED", where: "evm", evidence: {} });
     } catch (e) {
-      steps.push({ attack: A, step: "forged $1 round at PriceFeed.postRound", verdict: "REFUSED", where: "evm", evidence: errorEvidence(e) });
+      const ev = errorEvidence(e);
+      steps.push({ attack: A, step, verdict: postRoundVerdict(ev.revert), where: "evm", evidence: { ...ev, twoSig } });
     }
   }
 
   // An EVM transaction signed with a stolen key, without an EVM window opened by a hybrid native message.
   const victim = await loadAccount(VICTIMS[0]);
   const wallet = createWalletClient({ account: privateKeyToAccount(victim.keys.privateKey as `0x${string}`), chain: chain.evm.chain, transport: http(chain.config.evmRpc) });
+  const step = `${VICTIMS[0]}: EVM transfer with the stolen key, no window`;
   try {
     const hash = await wallet.sendTransaction({ to: attacker.evm, value: 1n, gas: 21_000n });
-    steps.push({ attack: A, step: `${VICTIMS[0]}: EVM transfer with the stolen key, no window`, verdict: "NOT REFUSED", where: "evm", evidence: { txHash: hash } });
+    steps.push({ attack: A, step, verdict: "NOT REFUSED", where: "evm", evidence: { txHash: hash } });
   } catch (e) {
-    steps.push({ attack: A, step: `${VICTIMS[0]}: EVM transfer with the stolen key, no window`, verdict: "REFUSED", where: "evm", evidence: errorEvidence(e) });
+    steps.push({ attack: A, step, verdict: windowVerdict(e), where: "evm", evidence: { ...errorEvidence(e), window: classifyEvmWindowRejection(e) ?? "none" } });
   }
   return steps;
 }

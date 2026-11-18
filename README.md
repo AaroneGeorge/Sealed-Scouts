@@ -8,6 +8,10 @@ Build Before Q-Day fest (Protocol Builders track).
 QoreChain has no price oracle yet, so no lending, stablecoin or DCA app on it can read a fair price. Oracles are
 also the best Q-Day target: whoever forges the reporters' signatures can drain every app that trusts the feed.
 
+**Live demo:** [sealed-scouts.tailcdec7a.ts.net](https://sealed-scouts.tailcdec7a.ts.net) (QoreChain testnet). Its
+Verify tab checks any rollup's settlement receipt on chain, with no wallet. Until our rollup is live, the rounds shown
+are a labelled sample.
+
 ![Architecture](docs/images/architecture.svg)
 
 ## How it works

@@ -125,8 +125,10 @@ Roll back with `dokku ps:rollback sealed-scouts` (or redeploy the previous tree)
 ### Feed inside the container
 
 By default (`RUN_WATCHTOWER=1`) the container runs `packages/watchtower` in observe mode against
-`deployments/diana.json` and writes the feed to `/tmp/feed`. Before the rollup exists there is no deployments file,
-so the watchtower does not start and the page says the feed is not published yet; the Verify tab still works.
+`deployments/diana.json` and writes the feed to `/tmp/feed`. Before the rollup exists there is no deployments file:
+the watchtower does not start, and the API serves the bundled sample feed and sample evidence
+(`apps/api/fixtures`), which the page labels as sample data. Redeploy once `deployments/diana.json` exists to switch
+to the live feed. The Verify tab reads the real chain either way.
 
 If the container cannot write `/tmp`, mount a folder and point the feed there:
 

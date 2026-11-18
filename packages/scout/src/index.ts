@@ -5,4 +5,4 @@ export * from "./scout.js";
 export * from "./ledger.js";
 export * from "./deployment.js";
 export * from "./venue-sets.js";
-export { liveScoutChain, registeredKemKey } from "./live.js";
+export { assertBonded, liveScoutChain, registeredKemKey } from "./live.js";

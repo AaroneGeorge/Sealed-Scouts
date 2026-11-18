@@ -3,9 +3,9 @@
 import { pqSign, pqVerify, signPqLayer, verifyPqLayer } from "@qorechain/qoresign";
 import { postRollupDataMsg } from "@qorechain/rdk";
 import {
-  REJECT, anchorSignBytes, deriveRound, phaseOf, roundHash, toAttestation, type InboxEntry, type RoundParams,
+  REJECT, anchorSignBytes, deriveRound, phaseOf, roundHash, roundWindows, toAttestation, type InboxEntry, type RoundParams,
 } from "@sealed-scouts/core";
-import { chain as defaultChain, loadAccount, registry, wrapAccount, type Chain } from "@sealed-scouts/chain";
+import { ScoutEligibility, chain as defaultChain, loadAccount, registry, wrapAccount, type Chain } from "@sealed-scouts/chain";
 import { loadDeployment, registeredKemKey, type Deployment } from "@sealed-scouts/scout";
 import { PRICE_FEED_ABI, SimRollup, simIdentity } from "@sealed-scouts/watchtower";
 import { randomBytes } from "node:crypto";
@@ -102,7 +102,11 @@ export async function stolenKeysLive(chain: Chain = defaultChain()): Promise<Ste
   } else {
     const entries: InboxEntry[] = posted.sequences.map((seq, i) => ({ seq, height: posted.height, poster: attacker.address, payload: [own.report, own.commit][i]! }));
     const pq = new Map([[attacker.address, attacker.keys.pqc.publicKey]]);
-    const result = deriveRound(entries, round, { ...d.timing, ...d.rules, chainId: d.chainId, rollupId: d.rollupId, operator: d.operator, pqKeyOf: (s) => pq.get(s) }, (s) => d.scouts.includes(s));
+    // The operator's eligibility rule, read at the round's close (or now, if the round is still open).
+    const eligibility = new ScoutEligibility(chain.evm.publicClient, d.scouts, d.priceFeed);
+    const closeHeight = roundWindows(round, d.timing).commitEnd;
+    await eligibility.snapshot(round, closeHeight < posted.height ? closeHeight : posted.height);
+    const result = deriveRound(entries, round, { ...d.timing, ...d.rules, chainId: d.chainId, rollupId: d.rollupId, operator: d.operator, pqKeyOf: (s) => pq.get(s) }, eligibility.eligible);
     const reason = result.rejected.find((r) => r.scout === attacker.address)?.reason ?? "counted";
     steps.push({ attack: A, step: "ATTACKER: post $1 report from its own account", verdict: reason === REJECT.notEligible ? "REFUSED" : "NOT REFUSED", where: "rollup", evidence: { txHash: posted.txHash, deriveRound: reason } });
   }

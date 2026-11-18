@@ -71,7 +71,9 @@ export class Watchtower {
 
       const inRound = this.entries.filter((e) => e.height >= w.start && e.height < w.revealEnd);
       await this.loadKeys(inRound);
-      const eligible = (scout: string) => (this.cfg.scouts.length === 0 ? this.keys.get(scout) !== undefined : this.cfg.scouts.includes(scout));
+      const eligible = this.source.eligibility
+        ? await this.source.eligibility(round, w.commitEnd)
+        : (scout: string) => (this.cfg.scouts.length === 0 ? this.keys.get(scout) !== undefined : this.cfg.scouts.includes(scout));
       const check = checkRound(inRound, round, { ...params, pqKeyOf: (s) => this.keys.get(s) }, eligible, await this.source.feedRound(round));
       this.rounds.set(round, check);
       if (!prev || prev.verdict !== check.verdict || prev.feed?.status !== check.feed?.status) {

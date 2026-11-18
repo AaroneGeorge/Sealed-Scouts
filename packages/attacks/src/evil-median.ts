@@ -59,7 +59,7 @@ export async function evilMedianLive(opts: { timeoutMs?: number; chain?: Chain }
   const tower = await loadAccount("TOWER");
   const watchtower = new Watchtower(
     towerConfigFrom(d),
-    liveSource(chain, d.rollupId, d.priceFeed), new FeedWriter(mkdtempSync(join(tmpdir(), "ss-evil-"))), liveChallenger(chain, tower, d.rollupId, d.priceFeed),
+    liveSource(chain, d), new FeedWriter(mkdtempSync(join(tmpdir(), "ss-evil-"))), liveChallenger(chain, tower, d.rollupId, d.priceFeed),
   );
   const deadline = Date.now() + (opts.timeoutMs ?? 30 * 60_000);
   while (Date.now() < deadline) {

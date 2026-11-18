@@ -56,7 +56,7 @@ export async function badBatchLive(opts: { bond?: boolean; chain?: Chain } = {})
   }
 
   // The parent state: replay every batch so far, as any watchtower can.
-  const source = liveSource(chain, d.rollupId, d.priceFeed);
+  const source = liveSource(chain, d);
   const replay = new LedgerReplay(d);
   const head = await source.inboxHead();
   replay.replay(await source.batches(0), head > 0n ? await source.readInbox(1n, head) : []);

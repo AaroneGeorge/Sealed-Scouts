@@ -10,7 +10,7 @@ import { decodeMsg, decodeReportPlaintext, phaseOf, reportAad, reportPurpose, to
 import { accountFromMnemonic, chain as defaultChain, loadAccount, mnemonicEnvName } from "@sealed-scouts/chain";
 import { loadDeployment, type Deployment } from "./deployment.js";
 import { joinPayload, ledgerKeyOf, nextNonce, withdrawalPayload } from "./ledger.js";
-import { liveScoutChain, registeredKemKey } from "./live.js";
+import { assertBonded, liveScoutChain, registeredKemKey } from "./live.js";
 import { formatE8, politeGetJson, readPrices } from "./prices/index.js";
 import { buildSealedReport } from "./report.js";
 import { Scout, toPriceSet } from "./scout.js";
@@ -88,6 +88,7 @@ async function run(): Promise<void> {
   const account = await loadAccount(role);
   const chain = defaultChain();
   const timing = values.demo ? (d.demoTiming ?? d.timing) : d.timing;
+  await assertBonded(chain, account, d.priceFeed, d.scouts);
   const scout = new Scout({
     config: { chainId: d.chainId, rollupId: d.rollupId, operator: d.operator, timing },
     signer: account,

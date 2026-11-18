@@ -15,6 +15,11 @@ export interface TowerSource {
   pqKey(scout: string): Promise<Uint8Array | undefined>;
   /** The round as PriceFeed holds it; undefined when there is no feed contract to read. */
   feedRound(round: bigint): Promise<FeedRound | undefined>;
+  /**
+   * Who may report in `round`, read as of its close height (the operator's rule). Without it the tower uses
+   * TowerConfig.scouts, or every poster with a registered key (fixture mode).
+   */
+  eligibility?(round: bigint, closeHeight: bigint): Promise<(scout: string, round: bigint) => boolean>;
 }
 
 export interface Challenger {

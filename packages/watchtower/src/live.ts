@@ -3,7 +3,7 @@
 import { fetchPqKeyStatus } from "@qorechain/qoresign/network";
 import { challengeBatchMsg } from "@qorechain/rdk";
 import { toHex, type Leaf, type RoundAttestation } from "@sealed-scouts/core";
-import type { Account, Chain } from "@sealed-scouts/chain";
+import { ScoutEligibility, type Account, type Chain } from "@sealed-scouts/chain";
 import type { Deployment } from "@sealed-scouts/scout";
 import { FEED_STATUS, PRICE_FEED_ABI } from "./abi.js";
 import type { BatchInfo } from "./ledger.js";
@@ -19,8 +19,12 @@ export function towerConfigFrom(d: Deployment): TowerConfig {
 const LOG_CHUNK = 10_000n;
 const LOG_LOOKBACK = 400_000n;
 
-export function liveSource(chain: Chain, rollupId: string, priceFeed?: `0x${string}`): TowerSource {
+export function liveSource(chain: Chain, d: Pick<Deployment, "rollupId" | "scouts" | "priceFeed">): TowerSource {
+  const { rollupId, priceFeed } = d;
   const rest = chain.inbox.rest;
+  // The same eligibility rule and snapshot height as the operator, so both derive the same rounds.
+  const eligibility = new ScoutEligibility(chain.evm.publicClient, d.scouts, priceFeed);
+  const snapshotted = new Set<bigint>();
   const pc = chain.evm.publicClient;
   const posted = new Map<bigint, RoundAttestation>();
 
@@ -45,6 +49,13 @@ export function liveSource(chain: Chain, rollupId: string, priceFeed?: `0x${stri
     pc.readContract({ address: priceFeed!, abi: PRICE_FEED_ABI, functionName: functionName as never, args: args as never }) as Promise<T>;
 
   return {
+    eligibility: async (round, closeHeight) => {
+      if (!snapshotted.has(round)) {
+        await eligibility.snapshot(round, closeHeight);
+        snapshotted.add(round);
+      }
+      return eligibility.eligible;
+    },
     height: async () => BigInt(await rest.getLatestHeight()),
     inboxHead: () => chain.inbox.head(rollupId),
     readInbox: (from, to) => chain.inbox.read(rollupId, from, to),

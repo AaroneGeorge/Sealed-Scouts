@@ -39,7 +39,7 @@ if (fixture) {
   const d = loadDeployment();
   if (!d) throw new Error("deployments/diana.json is missing: the rollup is not launched yet (try --fixture)");
   cfg = towerConfigFrom(d);
-  source = liveSource(defaultChain(), d.rollupId, d.priceFeed);
+  source = liveSource(defaultChain(), d);
   if (values.active) challenger = liveChallenger(defaultChain(), await loadAccount("TOWER"), d.rollupId, d.priceFeed);
 }
 

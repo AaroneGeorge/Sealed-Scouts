@@ -104,3 +104,23 @@ describe("Watchtower on the simulated demo history", () => {
     expect(tower.status().rounds.replayed).toBe(0);
   });
 });
+
+describe("eligibility from the source (the operator's rule)", () => {
+  it("asks once per check at the round's close height and applies the answer", async () => {
+    const asked: [bigint, bigint][] = [];
+    const banned = sim.scouts[0]!.address;
+    const source = {
+      ...sim.asSource(),
+      eligibility: async (round: bigint, closeHeight: bigint) => {
+        asked.push([round, closeHeight]);
+        return (scout: string) => scout !== banned;
+      },
+    };
+    const dir = feedDir();
+    await new Watchtower(cfg, source, new FeedWriter(dir), undefined, () => {}).sync();
+    expect(asked[0]).toEqual([0n, sim.params.genesisHeight + sim.params.commitBlocks]);
+    const r0 = readJson(join(dir, "rounds", "0.json"));
+    expect(r0.rejected).toContainEqual({ scout: banned, reason: "not-eligible" });
+    expect(r0.verdict).toBe("root-wrong"); // the feed was posted with five reports; this rule counts four
+  });
+});

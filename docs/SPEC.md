@@ -116,3 +116,27 @@ Additive clarifications. Each one pins down a detail the text above left open; n
     `[A-Za-z0-9._:/-]{1,128}` in a purpose, so `|` is refused. The aad is unchanged.
 13. `roundHash` domain is final as in item 1: `chainId` is the EVM chain id as `uint256` (`block.chainid`), not the
     native chain id string. Contracts and TypeScript both follow this; the vectors in `fixtures/vectors/` are the reference.
+
+**2026-11-19 (Track B, contracts).**
+
+14. Two-signature fallback (if the chain refuses a 32-byte `validator_set_hash`). A feed deployed with
+    `twoSigMode = true` takes, in the same `anchorSig` argument, `anchorSig ‖ roundSig` (2 × 4,627 bytes). `anchorSig`
+    covers the anchor bytes with an empty vsh (148 bytes for `sealed-scouts-1`). `roundSig` is the creator's ML-DSA-87
+    signature over the QoreSign bytes of `sealed-scouts/round/v1|<rollupId>|<round>|<roundHash, 64 lowercase hex, no 0x>`.
+    `twoSigMode()` tells callers which mode a deployment runs. No ABI change.
+15. Bond exits are signed by `who`'s registered ML-DSA-87 key (QoreSign bytes, Cosmos chain id), relayed by anyone:
+    `sealed-scouts/exit/v1|<evm chain id>|<feed 0x lowercase>|<who 0x lowercase>|<nonce>` for `requestExit`, then after
+    `exitDelay`: `sealed-scouts/withdraw/v1|<evm chain id>|<feed>|<who>|<to>|<nonce>` for `withdrawBond`. Decimals,
+    `nonce` = `bonds(who).nonce` at signing time (it bumps after each use). Keys must be registered with proof of
+    possession (`pqcKeyStatus` fourth value).
+16. `latest()` status codes: 0 none, 1 pending, 2 final, 3 corrected by the court (final at once). `readFinal` uses the
+    newest settled round of the feed (it falls back to the previous round while a newer one is pending) and reverts if
+    that price is missing, zero, or older than `maxAge` seconds from the round's `closeTime`.
+17. `postRound` refuses: no feeds, unequal arrays, feedIds not strictly ascending, a count below quorum, a zero median,
+    `inboxStart > inboxEnd`, `closeTime` in the future, a round or batchIndex not above the last posted one, and an
+    operator bond below the minimum or with an exit pending. The court (`challengeMedian`) needs every leaf, sorted by
+    scout, matching `reportsRoot`; a wrong median, a wrong count, a wrong `reportCount`, or a leaf from another round
+    is a fault. On a fault the whole operator bond is slashed (half to the caller, half locked as burned).
+18. `slashOutlier` works only on a settled round and needs the scout's own COMMIT signature (`keccak256(sig) ==
+    commitSigHash`, verified with the scout's registered key). The whole scout bond is slashed, half to the caller.
+    `exitDelay ≥ 2 × challengeWindow`, so a round a scout took part in can be judged before its bond leaves.

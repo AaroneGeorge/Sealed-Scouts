@@ -14,7 +14,7 @@ graphify-out/
 !.env.example
 .secrets/
 # Loads mnemonics from the server's secret store into a shell; it holds none itself and must stay that way.
-ops/env.local.sh
+ops/*.local.sh
 
 # Local service output. The watchtower writes feed/; long-running services keep pids and logs in run/.
 /feed/

@@ -47,6 +47,7 @@ export class Relayer {
     });
     const rc = await pub.waitForTransactionReceipt({ hash });
     this.chain.native.resync(this.account.address);
+    if (rc.status !== "success") throw new Error(`postRound tx ${hash} for round ${att.round} ended "${rc.status}" (gas used ${rc.gasUsed})`);
     return { hash, gasUsed: rc.gasUsed, status: rc.status };
   }
 }

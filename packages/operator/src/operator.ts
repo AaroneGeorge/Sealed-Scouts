@@ -209,16 +209,19 @@ export class Operator {
 
     // PriceFeed takes the anchor signature, or in two-signature mode anchorSig ‖ roundSig.
     const feedSig = this.twoSig ? concat(sig, roundSignature(this.d.operator, dep.chainId, dep.rollupId, round, rh)) : sig;
-    let relayed: unknown = "skipped: no quorum";
-    if (result.status === "ok" && this.relay) {
+    let relayed: Record<string, unknown>;
+    if (!this.relay) relayed = { status: "skipped", reason: "no PriceFeed or relayer configured" };
+    else if (result.status !== "ok") relayed = { status: "skipped", reason: "no quorum" };
+    else {
       try {
-        relayed = await this.relay.postRound(att, toHex(plan.input.stateRoot), plan.input.txCount, toHex(feedSig));
+        const r = await this.relay.postRound(att, toHex(plan.input.stateRoot), plan.input.txCount, toHex(feedSig));
+        relayed = { status: "posted", hash: r.hash, gasUsed: r.gasUsed };
         this.log(`round ${round}: relayed to PriceFeed ${JSON.stringify(relayed, big)}`);
       } catch (err) {
-        relayed = `failed: ${(err as Error).message.split("\n")[0]}`;
-        this.log(`round ${round}: relay ${relayed}; anyone can relay it later from the round record`);
+        relayed = { status: "failed", error: (err as Error).message.split("\n")[0] };
+        this.log(`round ${round}: relay FAILED (${relayed.error}); anyone can relay it later from the round record`);
       }
-    } else if (!this.relay) relayed = "skipped: no PriceFeed or relayer configured";
+    }
 
     addInBand(this.state.tally, result);
     if ((round + 1n) % BigInt(dep.params.rewardEpochRounds) === 0n) await this.payRewards(round);

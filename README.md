@@ -55,6 +55,14 @@ SKIP, never PASS.
 
 The same receipt checks run on any rollup: `npm run judge -- --rollup vigil-1`.
 
+To check a receipt with the RDK's own tool instead of our code:
+
+```bash
+npm run receipt -- --out receipt.json        # also writes receipt.tampered.json
+npx @qorechain/rdk-cli@0.9.0 receipt verify receipt.json            # 6 of 6 PASS
+npx @qorechain/rdk-cli@0.9.0 receipt verify receipt.tampered.json   # fails
+```
+
 The demo page does the same in your browser. Open its **Verify** tab and press **Verify on chain**: the page reads
 the batch and its anchor, rebuilds the signed bytes, and calls `pqcVerify` with a plain `eth_call`. Tick
 "Change one digit first" to watch the same signature fail.

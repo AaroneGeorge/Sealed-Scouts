@@ -1,6 +1,8 @@
 // npm run receipt -w @sealed-scouts/operator -- [--rollup ID] [--batch N] [--out FILE]
 // Builds the RDK settlement receipt of an anchored batch, verifies it against live chain state (six checks),
 // then verifies a copy with one changed state-root character, which must fail.
+// --out FILE writes the bare receipt in the format of `qorollup receipt --out`, so anyone can check it with
+// `npx @qorechain/rdk-cli@0.9.0 receipt verify FILE`. The tampered copy goes next to it as FILE.tampered.json.
 import { writeFileSync } from "node:fs";
 import { createRdkClient, verifySettlementReceipt, type SettlementReceipt, buildSettlementReceipt } from "@qorechain/rdk";
 import { chain } from "@sealed-scouts/chain";
@@ -24,7 +26,11 @@ const bad = await verifySettlementReceipt(tampered, { client });
 print("tampered copy (one state-root character changed)", bad);
 
 const out = option("--out");
-if (out) writeFileSync(out, JSON.stringify({ receipt, verification: honest, tampered: { receipt: tampered, verification: bad } }, null, 2) + "\n");
+if (out) {
+  writeFileSync(out, JSON.stringify(receipt, null, 2) + "\n");
+  writeFileSync(out.replace(/\.json$/, "") + ".tampered.json", JSON.stringify(tampered, null, 2) + "\n");
+  console.log(`wrote ${out}; check it with: npx @qorechain/rdk-cli@0.9.0 receipt verify ${out}`);
+}
 process.exitCode = honest.valid && !bad.valid ? 0 : 1;
 
 function print(title: string, v: Awaited<ReturnType<typeof verifySettlementReceipt>>) {

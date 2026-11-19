@@ -1,82 +1,88 @@
 {
- "claims": {
-  "rollup-created": {
-   "tx": "6C4BCD519248FBE074CC5ACBB4CBB2309D331D06201B5685E873AD19514572D1",
-   "layer": "native",
-   "note": "MsgCreateRollup: sealed-scouts-1, optimistic, qledger-v1, based",
-   "at": "2026-11-19T19:00:36.407689Z"
-  },
-  "pqc-key-registered": {
-   "tx": "D289D342B44F8C8464697949E8218002A5FFECEDB93A123930BD39CC69FC2B93",
-   "layer": "native",
-   "note": "operator ML-DSA-87 key with proof of possession",
-   "at": "2026-11-19T19:00:36.407689Z"
-  },
-  "batch-anchored": {
-   "tx": "8C2E810F6FA91B3DE2F924DC6C6C3C896A84E5B3126C5962260C11AD873E6256",
-   "layer": "native",
-   "note": "batch 2 (round 2), hybrid tx with ML-DSA-87 anchor signature",
-   "at": "2026-11-19T19:00:36.407689Z"
-  },
-  "round-in-anchor": {
-   "tx": "8C2E810F6FA91B3DE2F924DC6C6C3C896A84E5B3126C5962260C11AD873E6256",
-   "layer": "native",
-   "note": "round 2 hash 0x6cedf492e0\u2026 in the anchor's validator_set_hash",
-   "at": "2026-11-19T19:00:36.407689Z"
-  },
-  "contracts-deployed": {
-   "tx": "0xb6a893d5de72c957ea1941e795c6ea78c9cb7cfdf14e9f1b98f2f741741c8fda",
-   "layer": "evm",
-   "note": "PriceFeed 0x110a96a80c15b848e6eb2b2763b4edb0da8d9660, ScoutLend 0x22f08118c899a2b970268516ff6dd1447ad6f397",
-   "at": "2026-11-19T19:00:36.407689Z"
-  },
-  "receipt-evm": {
-   "tx": "0x5a9553e95f684622a66eddac453326fc45225404da5cd16c77b2f38b803e386e",
-   "layer": "evm",
-   "note": "PriceFeed.postRound for round 2 (batch 2), anchor checked by pqcVerify",
-   "at": "2026-11-19T19:00:36.407689Z"
-  },
-  "kem-key-registered": {
-   "tx": "EDBF3E4716A67887B3D01E63986D42113E04BF3E43A3D7BCA0BA05916CA4EB6B",
-   "layer": "native",
-   "note": "operator ML-KEM-1024 key",
-   "at": "2026-11-19T19:00:36.407689Z"
-  },
-  "sealed-report": {
-   "tx": "73B3A7EDC0D6B7476A1DF382E9E4C1DA80F39AAA92C8E9C5C2D2931AE30185D6",
-   "layer": "native",
-   "note": "SCOUT1 round 2: REPORT 1772 B + COMMIT 4672 B",
-   "at": "2026-11-19T19:00:36.407689Z"
-  },
-  "round-opened": {
-   "tx": "EDB651398493C8A16CEC356044E01241C4229362693AD4B7EBB0ACBE3972C366",
-   "layer": "native",
-   "note": "round 2 OPEN with 3 openings",
-   "at": "2026-11-19T19:00:36.407689Z"
-  },
-  "lender-final-read": {
-   "tx": "0xea61ef3f8b3d40165d8e426a42facfc9af515f504d065941135c591297882b22",
-   "layer": "evm",
-   "note": "ScoutLend.borrow 50 fUSD against 0.1 fETH at final round-2 prices",
-   "at": "2026-11-19T19:00:36.407689Z"
-  },
-  "receipt-offchain": {
-   "tx": "8C2E810F6FA91B3DE2F924DC6C6C3C896A84E5B3126C5962260C11AD873E6256",
-   "layer": "native",
-   "note": "batch 2 receipt in evidence/receipt-sealed-scouts-1-batch-2.json: 6 of 6 PASS with npx @qorechain/rdk-cli@0.9.0 receipt verify; the .tampered.json copy fails",
-   "at": "2026-11-19T19:01:52.507631+00:00"
-  },
-  "court-slash": {
-   "tx": "0xa206be90e2456a234d6882dd1df2cc1e28b219cef5947e210fb3d983320a675a",
-   "layer": "evm",
-   "note": "evil-median: operator's wrong median in round 5 challenged",
-   "at": "2026-11-19T19:03:13.086Z"
-  },
-  "reward-paid": {
-   "tx": "516045A2731E639AF31FAEAF654FF126BFE3270FB32F27B440B585FB775039FF",
-   "layer": "native",
-   "note": "epoch ending round 5: 0.6 QOR each to SCOUT1-3 on the rollup ledger",
-   "at": "2026-11-19T19:04:00.990962+00:00"
+  "claims": {
+    "rollup-created": {
+      "tx": "6C4BCD519248FBE074CC5ACBB4CBB2309D331D06201B5685E873AD19514572D1",
+      "layer": "native",
+      "note": "MsgCreateRollup: sealed-scouts-1, optimistic, qledger-v1, based",
+      "at": "2026-11-19T19:00:36.407689Z"
+    },
+    "pqc-key-registered": {
+      "tx": "D289D342B44F8C8464697949E8218002A5FFECEDB93A123930BD39CC69FC2B93",
+      "layer": "native",
+      "note": "operator ML-DSA-87 key with proof of possession",
+      "at": "2026-11-19T19:00:36.407689Z"
+    },
+    "batch-anchored": {
+      "tx": "8C2E810F6FA91B3DE2F924DC6C6C3C896A84E5B3126C5962260C11AD873E6256",
+      "layer": "native",
+      "note": "batch 2 (round 2), hybrid tx with ML-DSA-87 anchor signature",
+      "at": "2026-11-19T19:00:36.407689Z"
+    },
+    "round-in-anchor": {
+      "tx": "8C2E810F6FA91B3DE2F924DC6C6C3C896A84E5B3126C5962260C11AD873E6256",
+      "layer": "native",
+      "note": "round 2 hash 0x6cedf492e0… in the anchor's validator_set_hash",
+      "at": "2026-11-19T19:00:36.407689Z"
+    },
+    "contracts-deployed": {
+      "tx": "0xb6a893d5de72c957ea1941e795c6ea78c9cb7cfdf14e9f1b98f2f741741c8fda",
+      "layer": "evm",
+      "note": "PriceFeed 0x110a96a80c15b848e6eb2b2763b4edb0da8d9660, ScoutLend 0x22f08118c899a2b970268516ff6dd1447ad6f397",
+      "at": "2026-11-19T19:00:36.407689Z"
+    },
+    "receipt-evm": {
+      "tx": "0x5a9553e95f684622a66eddac453326fc45225404da5cd16c77b2f38b803e386e",
+      "layer": "evm",
+      "note": "PriceFeed.postRound for round 2 (batch 2), anchor checked by pqcVerify",
+      "at": "2026-11-19T19:00:36.407689Z"
+    },
+    "kem-key-registered": {
+      "tx": "EDBF3E4716A67887B3D01E63986D42113E04BF3E43A3D7BCA0BA05916CA4EB6B",
+      "layer": "native",
+      "note": "operator ML-KEM-1024 key",
+      "at": "2026-11-19T19:00:36.407689Z"
+    },
+    "sealed-report": {
+      "tx": "73B3A7EDC0D6B7476A1DF382E9E4C1DA80F39AAA92C8E9C5C2D2931AE30185D6",
+      "layer": "native",
+      "note": "SCOUT1 round 2: REPORT 1772 B + COMMIT 4672 B",
+      "at": "2026-11-19T19:00:36.407689Z"
+    },
+    "round-opened": {
+      "tx": "EDB651398493C8A16CEC356044E01241C4229362693AD4B7EBB0ACBE3972C366",
+      "layer": "native",
+      "note": "round 2 OPEN with 3 openings",
+      "at": "2026-11-19T19:00:36.407689Z"
+    },
+    "lender-final-read": {
+      "tx": "0xea61ef3f8b3d40165d8e426a42facfc9af515f504d065941135c591297882b22",
+      "layer": "evm",
+      "note": "ScoutLend.borrow 50 fUSD against 0.1 fETH at final round-2 prices",
+      "at": "2026-11-19T19:00:36.407689Z"
+    },
+    "receipt-offchain": {
+      "tx": "8C2E810F6FA91B3DE2F924DC6C6C3C896A84E5B3126C5962260C11AD873E6256",
+      "layer": "native",
+      "note": "batch 2 receipt in evidence/receipt-sealed-scouts-1-batch-2.json: 6 of 6 PASS with npx @qorechain/rdk-cli@0.9.0 receipt verify; the .tampered.json copy fails",
+      "at": "2026-11-19T19:01:52.507631+00:00"
+    },
+    "court-slash": {
+      "tx": "0xa206be90e2456a234d6882dd1df2cc1e28b219cef5947e210fb3d983320a675a",
+      "layer": "evm",
+      "note": "evil-median: operator's wrong median in round 5 challenged",
+      "at": "2026-11-19T19:03:13.086Z"
+    },
+    "reward-paid": {
+      "tx": "516045A2731E639AF31FAEAF654FF126BFE3270FB32F27B440B585FB775039FF",
+      "layer": "native",
+      "note": "epoch ending round 5: 0.6 QOR each to SCOUT1-3 on the rollup ledger",
+      "at": "2026-11-19T19:04:00.990962+00:00"
+    },
+    "withdrawal-executed": {
+      "tx": "2D9B88663E9F6376613AA68CDD718098D5F83EF15F339CB84B40D61F6FB36A85",
+      "layer": "native",
+      "note": "operator executed SCOUT1 withdrawal 0 of batch 6 (600000 uqor, request tx 2FD1E2FF38589F6135223B22D4764A7844024D0A7FD9AF24AE1B8EF86CC7D0F8) once the batch was final",
+      "at": "2026-11-19T20:05:16.000Z"
+    }
   }
- }
 }

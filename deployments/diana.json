@@ -1,0 +1,46 @@
+{
+  "chainId": "qorechain-diana",
+  "evmChainId": 9800,
+  "rollupId": "sealed-scouts-1",
+  "operator": "qor1gydsf0760dumk23gzph45w5y8gltuch8zfn9qf",
+  "operatorEvm": "0x411B04bFdA7B79Bb2A28106F5A3a843A3EBE62E7",
+  "genesisHeight": "10388379",
+  "createdHeight": "10388275",
+  "params": {
+    "roundBlocks": "300",
+    "commitBlocks": "180",
+    "openBlocks": "40",
+    "revealBlocks": "40",
+    "quorum": 3,
+    "bandBps": 200,
+    "slashBps": 1000,
+    "rewardEpochRounds": 6,
+    "rewardPerReportUqor": "100000"
+  },
+  "demo": {
+    "roundBlocks": "90",
+    "commitBlocks": "45",
+    "openBlocks": "15",
+    "revealBlocks": "15"
+  },
+  "scouts": [
+    "qor1crqflnm8lwqm5arhzw3kww3kmvzz56vkgh2z0f",
+    "qor15kzqgl4953c7fuekjwzalw3y0hy36zhc3e6ras",
+    "qor1f5yzt3au8nkgmswey6cszhfyre573duqy60x2m"
+  ],
+  "txs": {
+    "registerPqcKey": "already-registered",
+    "registerKemKey": "already-registered",
+    "createRollup": "6C4BCD519248FBE074CC5ACBB4CBB2309D331D06201B5685E873AD19514572D1",
+    "bondSubmitter": "AC0E68B6DAE9341ED319D2BF040EAF026319B19E0AF303E0CDB6CAC20650C4A3",
+    "rewardPoolDeposit": "0240BAFFFA4FADEF7E91539F0602C9F0E26FDF640E00023A37B8604F75F1CC05",
+    "deployContracts": "0xb6a893d5de72c957ea1941e795c6ea78c9cb7cfdf14e9f1b98f2f741741c8fda",
+    "fundBonds": "0xd98fd4408a059cdd79fe453ab118afc329d4c32d6cd73ee7faaddb2818136e39,0xe596452b988590396b862bf12a7070712b53a66d371514659c8e21f375623df7,0xfbaf8314cce813ba987ca3d63be695a510729bdfa0824b30e80b428d7e66a17d,0xf0307d8ecf5e185bc1c817c2a08388740bef926e65c0c038468e4f9e6eda1004"
+  },
+  "contracts": {
+    "PriceFeed": "0x110a96a80c15b848e6eb2b2763b4edb0da8d9660",
+    "ScoutLend": "0x22f08118c899a2b970268516ff6dd1447ad6f397"
+  },
+  "roundMode": "demo",
+  "demoUrl": "https://sealed-scouts.tailcdec7a.ts.net"
+}

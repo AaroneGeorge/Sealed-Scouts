@@ -14,7 +14,7 @@ APP=${1:-sealed-scouts}
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 tar -cf "$tmp/src.tar" --exclude=./.git --exclude=node_modules --exclude='./.env' --exclude='./.env.*' \
   --exclude=./feed --exclude=./run --exclude=dist --exclude=./contracts/out --exclude=./contracts/cache \
-  --exclude='*.log' --exclude=./ops/env.local.sh .
+  --exclude='*.log' --exclude='./ops/*.local.sh' .
 mkdir "$tmp/x" && tar -xf "$tmp/src.tar" -C "$tmp/x"
 cp apps/api/Dockerfile "$tmp/x/Dockerfile"
 if find "$tmp/x" -name '.env' -o -name '.env.local' -o -name 'env.local.sh' | grep -q .; then

@@ -1,0 +1,23 @@
+{
+ "name": "evil-median",
+ "note": "Live testnet run (qorechain-diana).",
+ "at": "2026-11-19T19:03:13.085Z",
+ "steps": [
+  {
+   "attack": "evil-median",
+   "step": "operator's wrong median in round 5 challenged",
+   "verdict": "REFUSED",
+   "where": "evm",
+   "claim": {
+    "id": "court-slash",
+    "layer": "evm",
+    "txKey": "challengeTx"
+   },
+   "evidence": {
+    "challengeTx": "0xa206be90e2456a234d6882dd1df2cc1e28b219cef5947e210fb3d983320a675a",
+    "feedStatus": 3,
+    "fETH": "1773.728973"
+   }
+  }
+ ]
+}

@@ -2,12 +2,14 @@
 // claims and spreads it on chain).
 //   source ops/env.local.sh
 //   npx tsx ops/fund.ts                       balances of every role
-//   npx tsx ops/fund.ts --topup [QOR]         bring SCOUT1-3, TOWER, ATTACKER up to QOR each (default 5)
+//   npx tsx ops/fund.ts --topup [QOR]         bring SCOUT1-3, TOWER, ATTACKER, RELAYER up to QOR each (default 5)
+//   npx tsx ops/fund.ts --register ROLE,...   register each role's ML-DSA-87 and ML-KEM-1024 keys (it must hold QOR);
+//                                             the chain refuses any message from an account without its ML-DSA key
 import { bank } from "@qorechain/sdk";
 import { ROLES, chain, loadAccount, type Role } from "../packages/chain/src/index.js";
 
 const c = chain();
-const TOPUP_ROLES: Role[] = ["SCOUT1", "SCOUT2", "SCOUT3", "TOWER", "ATTACKER"];
+const TOPUP_ROLES: Role[] = ["SCOUT1", "SCOUT2", "SCOUT3", "TOWER", "ATTACKER", "RELAYER"];
 const qor = (u: bigint) => (Number(u) / 1e6).toFixed(3);
 
 for (const role of ROLES) {
@@ -29,4 +31,15 @@ if (i > 0) {
   }
   if (msgs.length === 0) console.log("every role already holds the target");
   else console.log(`top-up of ${msgs.length} roles in one tx: ${(await c.native.sendOrThrow(op, msgs)).txHash}`);
+}
+
+const r = process.argv.indexOf("--register");
+if (r > 0) {
+  for (const role of (process.argv[r + 1] ?? "").split(",").filter(Boolean) as Role[]) {
+    const a = await loadAccount(role);
+    const pqc = await c.native.registerPqcKey(a);
+    const kem = await c.native.registerKemKey(a);
+    const show = (x: typeof pqc) => (x === "already-registered" ? x : x.txHash);
+    console.log(`${role}: ML-DSA-87 ${show(pqc)}, ML-KEM-1024 ${show(kem)}`);
+  }
 }

@@ -1,0 +1,110 @@
+{
+ "name": "stolen-keys",
+ "note": "Live testnet run (qorechain-diana).",
+ "at": "2026-11-19T18:57:04.434Z",
+ "steps": [
+  {
+   "attack": "stolen-keys",
+   "step": "SCOUT1: post $1 report, secp256k1 only",
+   "verdict": "REFUSED",
+   "where": "chain",
+   "evidence": {
+    "code": 20,
+    "codespace": "pqc",
+    "txHash": "500AD2F846810E719941B822A52347ED04388B772ADE27286594F097D3B35642",
+    "log": "account qor1crqflnm8lwqm5arhzw3kww3kmvzz56vkgh2z0f has a registered PQC key and must include the hybrid signature extension (hybrid mode: required): hybrid PQC "
+   }
+  },
+  {
+   "attack": "stolen-keys",
+   "step": "SCOUT1: post $1 report, attacker's ML-DSA-87 layer",
+   "verdict": "REFUSED",
+   "where": "chain",
+   "evidence": {
+    "code": 21,
+    "codespace": "pqc",
+    "txHash": "B0F284BCCEBB94FCBEBDFAAA862EDF382BA670244163233C3BC062373B2AC4CE",
+    "log": "PQC signature verification failed for qor1crqflnm8lwqm5arhzw3kww3kmvzz56vkgh2z0f: hybrid PQC signature verification failed"
+   }
+  },
+  {
+   "attack": "stolen-keys",
+   "step": "SCOUT2: post $1 report, secp256k1 only",
+   "verdict": "REFUSED",
+   "where": "chain",
+   "evidence": {
+    "code": 20,
+    "codespace": "pqc",
+    "txHash": "9771B26A9E31C1B66306017E6FE7B7202CABC52D3AEF312F87DF699106D11750",
+    "log": "account qor15kzqgl4953c7fuekjwzalw3y0hy36zhc3e6ras has a registered PQC key and must include the hybrid signature extension (hybrid mode: required): hybrid PQC "
+   }
+  },
+  {
+   "attack": "stolen-keys",
+   "step": "SCOUT2: post $1 report, attacker's ML-DSA-87 layer",
+   "verdict": "REFUSED",
+   "where": "chain",
+   "evidence": {
+    "code": 21,
+    "codespace": "pqc",
+    "txHash": "E57D0A021E7BC7AFAAF5A1ACE216C1A17B63D387674FEBCF8E82DF77D226A629",
+    "log": "PQC signature verification failed for qor15kzqgl4953c7fuekjwzalw3y0hy36zhc3e6ras: hybrid PQC signature verification failed"
+   }
+  },
+  {
+   "attack": "stolen-keys",
+   "step": "SCOUT3: post $1 report, secp256k1 only",
+   "verdict": "REFUSED",
+   "where": "chain",
+   "evidence": {
+    "code": 20,
+    "codespace": "pqc",
+    "txHash": "C6EF7B2F6C399550A7BFA7D491F4BDC66226C6C05C343EA1C0ECC96CD0D3E513",
+    "log": "account qor1f5yzt3au8nkgmswey6cszhfyre573duqy60x2m has a registered PQC key and must include the hybrid signature extension (hybrid mode: required): hybrid PQC "
+   }
+  },
+  {
+   "attack": "stolen-keys",
+   "step": "SCOUT3: post $1 report, attacker's ML-DSA-87 layer",
+   "verdict": "REFUSED",
+   "where": "chain",
+   "evidence": {
+    "code": 21,
+    "codespace": "pqc",
+    "txHash": "181DC8EEC976E18FBFD1DFEEE8B79E3A3CC701E4CC87D86208A7FA4AA227F39E",
+    "log": "PQC signature verification failed for qor1f5yzt3au8nkgmswey6cszhfyre573duqy60x2m: hybrid PQC signature verification failed"
+   }
+  },
+  {
+   "attack": "stolen-keys",
+   "step": "ATTACKER: post $1 report from its own account",
+   "verdict": "REFUSED",
+   "where": "rollup",
+   "evidence": {
+    "txHash": "A631F20660F78DCECD06F90B5E8C897D3BACC8C85D748B06B9C729B67572E5DA",
+    "deriveRound": "not-eligible"
+   }
+  },
+  {
+   "attack": "stolen-keys",
+   "step": "forged $1 round 3 (batch 3) at PriceFeed.postRound",
+   "verdict": "REFUSED",
+   "where": "evm",
+   "evidence": {
+    "revert": "BadSignature",
+    "error": "The contract function \"postRound\" reverted.",
+    "twoSig": false
+   }
+  },
+  {
+   "attack": "stolen-keys",
+   "step": "SCOUT1: EVM transfer with the stolen key, no window",
+   "verdict": "REFUSED",
+   "where": "evm",
+   "evidence": {
+    "error": "Missing or invalid parameters.",
+    "window": "no-window"
+   }
+  }
+ ]
+}

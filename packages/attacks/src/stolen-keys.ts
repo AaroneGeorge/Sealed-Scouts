@@ -91,6 +91,16 @@ export function windowVerdict(e: unknown): Step["verdict"] {
   return classifyEvmWindowRejection(e) === "no-window" ? "REFUSED" : "ERROR";
 }
 
+/** Wait for a height with at least `margin` blocks left in a round's commit window; return that round. */
+async function commitWindowRound(chain: Chain, timing: Parameters<typeof phaseOf>[1], margin = 10n): Promise<bigint> {
+  for (;;) {
+    const h = BigInt(await chain.inbox.rest.getLatestHeight());
+    const { round, phase } = phaseOf(h, timing);
+    if (phase === "commit" && h + margin < roundWindows(round, timing).commitEnd) return round;
+    await new Promise((r) => setTimeout(r, 3_000));
+  }
+}
+
 export async function stolenKeysLive(opts: { demo?: boolean; chain?: Chain } = {}): Promise<Step[]> {
   const chain = opts.chain ?? defaultChain();
   const d = needDeployment();
@@ -120,7 +130,9 @@ export async function stolenKeysLive(opts: { demo?: boolean; chain?: Chain } = {
   }
 
   // From its own account the attacker can post: the chain orders anything. The rollup ignores it.
-  const own = forgedReport({ chainId: d.chainId, rollupId: d.rollupId, round, victim: attacker.address, attackerPq: attacker.keys, openerKemKey: opener });
+  // Post inside a commit window, so the round rejects it for eligibility and not merely for arriving late.
+  const ownRound = await commitWindowRound(chain, timing);
+  const own = forgedReport({ chainId: d.chainId, rollupId: d.rollupId, round: ownRound, victim: attacker.address, attackerPq: attacker.keys, openerKemKey: opener });
   const posted = await chain.native.postToInbox(attacker, [own.report, own.commit], d.rollupId).catch((e) => e as Error);
   if (posted instanceof Error) {
     steps.push({ attack: A, step: "ATTACKER: post $1 report from its own account", verdict: "ERROR", where: "chain", evidence: errorEvidence(posted) });
@@ -129,12 +141,12 @@ export async function stolenKeysLive(opts: { demo?: boolean; chain?: Chain } = {
     const pq = new Map([[attacker.address, attacker.keys.pqc.publicKey]]);
     // The operator's eligibility rule, read at the round's close (or now, if the round is still open).
     const eligibility = new ScoutEligibility(chain.evm.publicClient, d.scouts, d.priceFeed);
-    const closeHeight = roundWindows(round, timing).commitEnd;
-    const snap = await eligibility.snapshot(round, closeHeight < posted.height ? closeHeight : posted.height);
+    const closeHeight = roundWindows(ownRound, timing).commitEnd;
+    const snap = await eligibility.snapshot(ownRound, closeHeight < posted.height ? closeHeight : posted.height);
     if (snap.status === "unknown") {
       steps.push({ attack: A, step: "ATTACKER: post $1 report from its own account", verdict: "ERROR", where: "rollup", evidence: { txHash: posted.txHash, eligibility: snap.reason } });
     } else {
-      const result = deriveRound(entries, round, { ...timing, ...d.rules, chainId: d.chainId, rollupId: d.rollupId, operator: d.operator, pqKeyOf: (s) => pq.get(s) }, eligibility.eligible);
+      const result = deriveRound(entries, ownRound, { ...timing, ...d.rules, chainId: d.chainId, rollupId: d.rollupId, operator: d.operator, pqKeyOf: (s) => pq.get(s) }, eligibility.eligible);
       const reason = result.rejected.find((r) => r.scout === attacker.address)?.reason ?? "counted";
       steps.push({ attack: A, step: "ATTACKER: post $1 report from its own account", verdict: reason === REJECT.notEligible ? "REFUSED" : "NOT REFUSED", where: "rollup", evidence: { txHash: posted.txHash, deriveRound: reason } });
     }

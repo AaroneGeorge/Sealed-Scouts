@@ -8,7 +8,7 @@ import { timingOf, type Deployment } from "@sealed-scouts/scout";
 import { FEED_STATUS, PRICE_FEED_ABI } from "./abi.js";
 import type { BatchInfo } from "./ledger.js";
 import type { FeedRound } from "./rounds.js";
-import type { Challenger, TowerSource } from "./source.js";
+import type { Challenger, TowerSource, UpheldFraud } from "./source.js";
 import type { TowerConfig } from "./tower.js";
 
 /** `demo` must match the operator's choice, or rounds are cut at different heights. */
@@ -56,6 +56,29 @@ export function liveSource(chain: Chain, d: Pick<Deployment, "rollupId" | "scout
     pc.readContract({ address: priceFeed!, abi: PRICE_FEED_ABI, functionName: functionName as never, args: args as never }) as Promise<T>;
 
   return {
+    fraudUpheld: async () => {
+      type Tx = { txhash: string; height: string; timestamp: string; events: { type: string; attributes: { key: string; value: string }[] }[] };
+      const out: UpheldFraud[] = [];
+      for (let page = 1; page <= 20; page++) {
+        const q = new URLSearchParams({ query: `rdk_fraud_upheld.rollup_id='${rollupId}'`, page: String(page), limit: "50", order_by: "ORDER_BY_ASC" });
+        const res = await chain.fetch(`${chain.config.rest}/cosmos/tx/v1beta1/txs?${q}`);
+        if (!res.ok) throw new Error(`fraud-upheld query: HTTP ${res.status}`);
+        const txs = ((await res.json()) as { tx_responses?: Tx[] }).tx_responses ?? [];
+        for (const tx of txs) {
+          for (const ev of tx.events.filter((e) => e.type === "rdk_fraud_upheld")) {
+            const a = Object.fromEntries(ev.attributes.map((x) => [x.key, x.value]));
+            if (a.rollup_id !== rollupId) continue;
+            out.push({
+              batchIndex: Number(a.batch_index), submitter: a.submitter ?? "", challenger: a.challenger ?? "",
+              slashedUqor: (a.slashed ?? "").replace(/uqor$/, ""), challengerRewardUqor: (a.challenger_reward ?? "").replace(/uqor$/, ""),
+              txHash: tx.txhash, height: tx.height, time: tx.timestamp,
+            });
+          }
+        }
+        if (txs.length < 50) break;
+      }
+      return out;
+    },
     eligibility: async (round, closeHeight) => {
       if (!snapshotted.has(round)) {
         const snap = await eligibility.snapshot(round, closeHeight);

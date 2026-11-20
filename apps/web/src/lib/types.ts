@@ -23,10 +23,19 @@ export interface TowerStatus {
   batches: {
     replayed: number; ok: number; fraud: number; skipped: number; latestIndex: number | null;
     list: { batchIndex: number; verdict: "ok" | "fraud" | "skipped"; entries: number; note?: string; proofBytes: number }[];
+    /** Fraud proofs the chain upheld for this rollup (its rdk_fraud_upheld events). Absent in older feeds. */
+    upheldOnChain?: number;
+    upheld?: UpheldBatch[];
   };
   operatorOmissions: number;
   challenges: Challenge[];
   latestRounds: { round: string; verdict: RoundVerdict; medians: Median[]; reports: number; leftOut: number; feedStatus: FeedStatus | null }[];
+}
+
+/** One rdk_fraud_upheld event: the chain rejected a batch and slashed its submitter. Amounts in uqor. */
+export interface UpheldBatch {
+  batchIndex: number; submitter: string; challenger: string; slashedUqor: string; challengerRewardUqor: string;
+  txHash: string; height: string; time: string;
 }
 
 export interface Challenge { kind: "median" | "batch"; target: string; at: string; sent: boolean; txHash?: string; code?: number; error?: string }
@@ -80,4 +89,6 @@ export interface Deployments {
   priceFeed?: Hex;
   scoutLend?: Hex;
   contracts?: { PriceFeed?: Hex; ScoutLend?: Hex };
+  /** "demo" when round numbers follow chain height (docs/SPEC.md); absent in older files. */
+  roundMode?: string;
 }

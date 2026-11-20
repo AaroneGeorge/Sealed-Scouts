@@ -141,8 +141,16 @@ fETH, fBTC and fUSD.
 Other open-source work we build on, with thanks: [viem](https://github.com/wevm/viem),
 [noble](https://github.com/paulmillr/noble-hashes) and [scure](https://github.com/paulmillr/scure-base) libraries,
 [CosmJS](https://github.com/cosmos/cosmjs), [Foundry](https://github.com/foundry-rs/foundry) and forge-std,
-[React](https://react.dev), [Vite](https://vite.dev), [Vitest](https://vitest.dev), [tsx](https://tsx.is). Fonts:
-Fraunces and IBM Plex (SIL Open Font License), served by Google Fonts.
+[React](https://react.dev), [Vite](https://vite.dev), [Vitest](https://vitest.dev), [tsx](https://tsx.is).
+
+Fonts on the demo page, all under the SIL Open Font License 1.1 and self-hosted from pinned
+[Fontsource](https://fontsource.org) packages (no requests to a font service):
+
+| Font | Package | Version | Used for |
+|---|---|---|---|
+| [Newsreader](https://github.com/productiontype/Newsreader) (Production Type) | `@fontsource-variable/newsreader` | 5.3.0 | Headlines and text |
+| [Libre Franklin](https://github.com/impallari/Libre-Franklin) (Impallari Type) | `@fontsource-variable/libre-franklin` | 5.3.0 | Labels, tables and figures |
+| [IBM Plex Mono](https://github.com/IBM/plex) (IBM) | `@fontsource/ibm-plex-mono` | 5.3.0 | Hashes and addresses |
 
 ## Docs
 

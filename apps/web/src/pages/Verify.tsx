@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Empty } from "../components/bits";
+import { Empty, Label } from "../components/bits";
 import { VerifyPanel } from "../components/VerifyPanel";
 import { api } from "../lib/api";
 import { useData } from "../lib/useData";
@@ -27,17 +27,18 @@ export function Verify({ defaultRollup, query }: { defaultRollup: string; query:
   const ours = live.some((r) => r.rollup_id === defaultRollup);
 
   return (
-    <div className="stack">
-      <section className="hero">
-        <span className="eyebrow">Settlement receipt · no wallet needed</span>
-        <h1>Verify a batch yourself.</h1>
-        <p>
+    <div className="stack" style={{ gap: 30 }}>
+      <header>
+        <span className="kicker">Fact check · no wallet needed</span>
+        <h1 className="headline sm">Is this batch's settlement receipt genuine? Check it yourself.</h1>
+        <p className="deck">
           Your browser reads the rollup, the batch and the anchor from QoreChain, rebuilds the exact bytes the creator
           signed, and asks the chain's own <code>pqcVerify</code> precompile whether the ML-DSA-87 signature holds.
         </p>
-      </section>
-      <section className="panel stack">
-        <div className="row">
+      </header>
+      <section aria-labelledby="fc-h">
+        <Label id="fc-h" aside="Pick any live optimistic rollup on the testnet">The receipt</Label>
+        <div className="controls" style={{ marginBottom: 20 }}>
           <label className="field">Rollup
             <select value={rollupId} onChange={(e) => { setRollupId(e.target.value); setBatch(""); }}>
               {!ours && <option value={defaultRollup}>{defaultRollup} (not live yet)</option>}

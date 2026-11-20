@@ -3,6 +3,7 @@
 //   source ops/env.local.sh
 //   npx tsx ops/fund.ts                       balances of every role
 //   npx tsx ops/fund.ts --topup [QOR]         bring SCOUT1-3, TOWER, ATTACKER, RELAYER up to QOR each (default 5)
+//   npx tsx ops/fund.ts --fund ROLE=QOR,...   bring each named role up to that many QOR from OPERATOR, in one tx
 //   npx tsx ops/fund.ts --register ROLE,...   register each role's ML-DSA-87 and ML-KEM-1024 keys (it must hold QOR);
 //                                             the chain refuses any message from an account without its ML-DSA key
 import { bank } from "@qorechain/sdk";
@@ -31,6 +32,24 @@ if (i > 0) {
   }
   if (msgs.length === 0) console.log("every role already holds the target");
   else console.log(`top-up of ${msgs.length} roles in one tx: ${(await c.native.sendOrThrow(op, msgs)).txHash}`);
+}
+
+const f = process.argv.indexOf("--fund");
+if (f > 0) {
+  const op = await loadAccount("OPERATOR");
+  const msgs = [];
+  for (const pair of (process.argv[f + 1] ?? "").split(",").filter(Boolean)) {
+    const [role, amount] = pair.split("=") as [Role, string];
+    const a = await loadAccount(role);
+    const missing = BigInt(Math.round(Number(amount) * 1e6)) - (await c.native.balance(a.address));
+    if (missing <= 0n) { console.log(`${role} already holds ${amount} QOR`); continue; }
+    console.log(`${role}: sending ${qor(missing)} QOR to ${a.address}`);
+    msgs.push(bank.send({ fromAddress: op.address, toAddress: a.address, amount: [{ denom: "uqor", amount: missing.toString() }] }));
+  }
+  if (msgs.length > 0) {
+    const res = await c.native.sendOrThrow(op, msgs);
+    console.log(`funded in one tx: ${res.txHash} (height ${res.height})`);
+  }
 }
 
 const r = process.argv.indexOf("--register");

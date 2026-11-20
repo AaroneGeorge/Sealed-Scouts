@@ -4,7 +4,7 @@ import { decodeMsg, roundHash, roundOf, roundWindows, type InboxEntry, type Roun
 import type { FeedWriter } from "./feed.js";
 import { LedgerReplay, type BatchCheck } from "./ledger.js";
 import { checkRound, type RoundCheck } from "./rounds.js";
-import type { Challenger, TowerSource } from "./source.js";
+import type { Challenger, TowerSource, UpheldFraud } from "./source.js";
 
 export interface TowerConfig {
   params: Omit<RoundParams, "pqKeyOf">;
@@ -35,6 +35,8 @@ export class Watchtower {
   private readonly challenged = new Set<string>();
   private readonly ledger: LedgerReplay;
   private height = 0n;
+  private upheld: UpheldFraud[] = [];
+  private upheldReadAt = 0;
 
   constructor(
     private readonly cfg: TowerConfig,
@@ -59,6 +61,7 @@ export class Watchtower {
 
     await this.checkRounds();
     if (this.cfg.ledger !== false) await this.checkBatches();
+    await this.readUpheld();
     this.publishStatus();
   }
 
@@ -139,6 +142,17 @@ export class Watchtower {
     }
   }
 
+  /** Upheld fraud proofs from the chain, at most once a minute: they survive restarts, unlike our own replay. */
+  private async readUpheld(): Promise<void> {
+    if (!this.source.fraudUpheld || Date.now() - this.upheldReadAt < 60_000) return;
+    try {
+      this.upheld = await this.source.fraudUpheld();
+      this.upheldReadAt = Date.now();
+    } catch (e) {
+      this.log(`fraud-upheld events: ${(e as Error).message}; keeping the last list`);
+    }
+  }
+
   /** Send a challenge once per target, in active mode only. Observe mode records what it would do. */
   private async act(kind: Challenge["kind"], target: string, send: () => Promise<{ txHash: string; code?: number }>): Promise<void> {
     if (this.challenged.has(target)) return;
@@ -193,6 +207,9 @@ export class Watchtower {
         skipped: this.batchChecks.filter((b) => b.verdict === "skipped").length,
         latestIndex: this.batchChecks.at(-1)?.batchIndex ?? null,
         list: this.batchChecks.slice(-20).map(({ proof, ...b }) => ({ ...b, proofBytes: proof?.length ?? 0 })),
+        // Read from the chain's events, so it counts every wrong root ever rejected, by any challenger.
+        upheldOnChain: this.upheld.length,
+        upheld: this.upheld,
       },
       operatorOmissions: rounds.reduce((n, r) => n + r.leftOut.length, 0),
       challenges: this.challenges,

@@ -6,6 +6,7 @@
 //   4. exit:   execute ledger withdrawals of finalized batches.
 // The round clock is the main-chain height (packages/core round.ts), never the local clock.
 import {
+  QLEDGER_DEPOSIT_POSTER_PREFIX,
   QledgerLedger,
   RestClient,
   encodeQledgerTx,
@@ -43,6 +44,8 @@ import { addInBand, joinsFrom, rewardLines } from "./rewards.js";
 import { RUN_DIR, type OperatorState, type StateStore } from "./state.js";
 
 /** A round whose relay keeps failing is given up after this many tries (the round record keeps the error). */
+/** More missed rounds than this after a stop are skipped rather than settled one by one. */
+const MAX_CATCH_UP_ROUNDS = 3n;
 const MAX_RELAY_ATTEMPTS = 3;
 
 /** Do not post an OPEN this close to the end of the open window: it might land too late. */
@@ -133,6 +136,16 @@ export class Operator {
 
   private async openRounds(height: bigint): Promise<void> {
     const current = roundOf(height, this.params);
+    // Back from a stop: rounds that passed while nothing ran have no openings to post. Settling each one would
+    // sweep the scouts' fresh reports into stale batches and leave the current rounds empty, so first settle what
+    // was already opened, then jump to the current round.
+    if (this.state.lastOpened !== undefined && current - BigInt(this.state.lastOpened) > MAX_CATCH_UP_ROUNDS) {
+      if (this.state.lastSettled !== this.state.lastOpened) return; // settleRounds finishes the opened ones first
+      const from = BigInt(this.state.lastOpened) + 1n;
+      this.log(`rounds ${from} to ${current - 1n}: passed while the operator was stopped; skipped, not settled`);
+      this.state.lastOpened = this.state.lastSettled = String(current - 1n);
+      this.d.store.save(this.state);
+    }
     let round = this.state.lastOpened !== undefined ? BigInt(this.state.lastOpened) + 1n : current;
     for (; round <= current; round++) {
       const w = roundWindows(round, this.params);
@@ -388,7 +401,8 @@ export class Operator {
 
   private async loadPqKeys(round: bigint): Promise<void> {
     const w = roundWindows(round, this.params);
-    const posters = new Set(this.entries.filter((e) => e.height >= w.start && e.height < w.revealEnd).map((e) => e.poster));
+    // Deposits enter the inbox under a "deposit:<address>" poster that is not an account: no key to look up.
+    const posters = new Set(this.entries.filter((e) => e.height >= w.start && e.height < w.revealEnd && !e.poster.startsWith(QLEDGER_DEPOSIT_POSTER_PREFIX)).map((e) => e.poster));
     for (const p of posters) {
       if (this.pqKeys.has(p)) continue;
       const status = await fetchPqcStatus({ rest: this.d.chain.config.rest, address: p, fetch: this.d.chain.fetch as unknown as typeof fetch });

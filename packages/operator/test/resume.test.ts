@@ -119,3 +119,38 @@ describe("reward epochs", () => {
     expect(h.operator.state.tally).toEqual({});
   });
 });
+
+describe("back from a stop", () => {
+  // A height in the commit window of round `r`: nothing to open yet, so openRounds posts nothing.
+  const inCommit = (o: { params: { genesisHeight: bigint; roundBlocks: bigint } }, r: bigint) => o.params.genesisHeight + r * o.params.roundBlocks + 1n;
+
+  it("skips the rounds that passed while it was stopped instead of settling them one by one", async () => {
+    const h = harness({ posted: new Set() });
+    h.operator.state.lastOpened = "10";
+    h.operator.state.lastSettled = "10";
+    await h.operator.openRounds(inCommit(h.operator, 500n));
+    expect(h.operator.state.lastOpened).toBe("499");
+    expect(h.operator.state.lastSettled).toBe("499");
+    expect(h.posts).toHaveLength(0);
+    expect(h.store.load().lastSettled).toBe("499");
+  });
+
+  it("settles rounds it had already opened before jumping", async () => {
+    const h = harness({ posted: new Set() });
+    h.operator.state.lastOpened = "10";
+    h.operator.state.lastSettled = "8";
+    await h.operator.openRounds(inCommit(h.operator, 500n));
+    expect(h.operator.state.lastOpened).toBe("10");
+    expect(h.operator.state.lastSettled).toBe("8");
+  });
+
+  it("walks a short gap round by round as before", async () => {
+    const h = harness({ posted: new Set() });
+    h.operator.state.lastOpened = "498";
+    h.operator.state.lastSettled = "498";
+    await h.operator.openRounds(inCommit(h.operator, 500n));
+    // Round 499's open window has passed, so it is marked opened (missed), but nothing is skipped: it still settles.
+    expect(h.operator.state.lastOpened).toBe("499");
+    expect(h.operator.state.lastSettled).toBe("498");
+  });
+});

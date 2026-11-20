@@ -23,6 +23,22 @@ export interface TowerSource {
    * tower then marks that round "unknown" and carries on.
    */
   eligibility?(round: bigint, closeHeight: bigint): Promise<(scout: string, round: bigint) => boolean>;
+  /**
+   * Every fraud proof the chain upheld against this rollup (its rdk_fraud_upheld events), from any challenger.
+   * A rejected batch is replaced by the next one at the same index, so replaying batches alone cannot count them.
+   */
+  fraudUpheld?(): Promise<UpheldFraud[]>;
+}
+
+export interface UpheldFraud {
+  batchIndex: number;
+  submitter: string;
+  challenger: string;
+  slashedUqor: string;
+  challengerRewardUqor: string;
+  txHash: string;
+  height: string;
+  time: string;
 }
 
 export interface Challenger {

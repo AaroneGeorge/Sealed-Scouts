@@ -1,4 +1,5 @@
 {
+  "ledger": "Money movements (grants, transfers, bonds, stakes, slashes) are recorded with tx hashes in the team ledger FUNDS.md, kept next to the repo.",
   "claims": {
     "rollup-created": {
       "tx": "6C4BCD519248FBE074CC5ACBB4CBB2309D331D06201B5685E873AD19514572D1",
@@ -83,6 +84,12 @@
       "layer": "native",
       "note": "operator executed SCOUT1 withdrawal 0 of batch 6 (600000 uqor, request tx 2FD1E2FF38589F6135223B22D4764A7844024D0A7FD9AF24AE1B8EF86CC7D0F8) once the batch was final",
       "at": "2026-11-19T20:05:16.000Z"
+    },
+    "chain-fraud-slash": {
+      "tx": "2E65D1173044E2AEE71D7732CF42DF540598FB4FA91F3E72C38BE1A6068E969B",
+      "layer": "native",
+      "note": "bad-batch run 2: TOWER sent MsgChallengeBatch with the qledger fraud proof 3 blocks after ROGUE batch 36 (submit tx 541B07F0…53B7, bond tx D03EFE26…D77D); chain upheld it, slashed 1,000 QOR, 500 to TOWER. Run 1 (packages/attacks/evidence/bad-batch-run1.json) was won by a public network challenger, so it is not counted.",
+      "at": "2026-11-20T12:44:29.075Z"
     }
   }
 }

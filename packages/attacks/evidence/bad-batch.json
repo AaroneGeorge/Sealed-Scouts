@@ -1,0 +1,45 @@
+{
+ "name": "bad-batch",
+ "note": "Live testnet run (qorechain-diana).",
+ "at": "2026-11-20T12:44:29.074Z",
+ "steps": [
+  {
+   "attack": "bad-batch",
+   "step": "ROGUE bonds as a batch submitter",
+   "verdict": "ACCEPTED",
+   "where": "chain",
+   "evidence": {
+    "txHash": "D03EFE2621E44044D4D5E60134FB07AA72328CE0169DD70D8920A478C598D77D",
+    "amount": "1000000000"
+   }
+  },
+  {
+   "attack": "bad-batch",
+   "step": "ROGUE submits batch 36 with a wrong state root",
+   "verdict": "ACCEPTED",
+   "where": "chain",
+   "evidence": {
+    "txHash": "541B07F0DBD2A38B7A40CB81A25BD1870BF4EC3AC261A9BD85F9F2FB949953B7",
+    "stateRoot": "f4ab2ea726d24c0d",
+    "honestRoot": "0bab2ea726d24c0d"
+   }
+  },
+  {
+   "attack": "bad-batch",
+   "step": "watchtower sends MsgChallengeBatch with the qledger fraud proof",
+   "verdict": "REFUSED",
+   "where": "chain",
+   "claim": {
+    "id": "chain-fraud-slash",
+    "layer": "native",
+    "txKey": "challengeTx"
+   },
+   "evidence": {
+    "challengeTx": "2E65D1173044E2AEE71D7732CF42DF540598FB4FA91F3E72C38BE1A6068E969B",
+    "code": 0,
+    "batchStatus": "rejected",
+    "rogueBondLeft": "0"
+   }
+  }
+ ]
+}

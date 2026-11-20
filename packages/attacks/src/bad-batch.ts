@@ -61,23 +61,37 @@ export async function badBatchLive(opts: { bond?: boolean; demo?: boolean; chain
   const replay = new LedgerReplay(d);
   const head = await source.inboxHead();
   replay.replay(await source.batches(0), head > 0n ? await source.readInbox(1n, head) : []);
-  const plan = await planQledgerBatch(rest, { chainId: d.chainId, rollupId: d.rollupId, submitter: rogue.address, ledger: replay.state() });
-  const wrongRoot = Uint8Array.from(plan.input.stateRoot, (b, i) => (i === 0 ? b ^ 0xff : b));
-  const sub = await chain.native.sendOrThrow(rogue, [submitBatchMsg({ ...plan.input, sequencer: rogue.address, stateRoot: wrongRoot })]);
-  steps.push({ attack: A, step: `ROGUE submits batch ${plan.input.batchIndex} with a wrong state root`, verdict: "ACCEPTED", where: "chain", evidence: { txHash: sub.txHash, stateRoot: bytesToHex(wrongRoot).slice(0, 16), honestRoot: bytesToHex(plan.input.stateRoot).slice(0, 16) } });
-
+  // Sync the watchtower before the bad batch exists, so it only has the new batch to check: public challengers
+  // watch every rollup, and the first valid fraud proof takes the reward.
   const tower = await loadAccount("TOWER");
   const watchtower = new Watchtower(
     towerConfigFrom(d, useDemo(d, opts.demo)),
     source, new FeedWriter(feedDir()), liveChallenger(chain, tower, d.rollupId, d.priceFeed),
   );
   await watchtower.sync();
-  const c = watchtower.challenges.find((x) => x.target === `batch ${plan.input.batchIndex}`);
-  const after = await rest.getBatch(d.rollupId, plan.input.batchIndex);
+  const plan = await planQledgerBatch(rest, { chainId: d.chainId, rollupId: d.rollupId, submitter: rogue.address, ledger: replay.state() });
+  const wrongRoot = Uint8Array.from(plan.input.stateRoot, (b, i) => (i === 0 ? b ^ 0xff : b));
+  const sub = await chain.native.sendOrThrow(rogue, [submitBatchMsg({ ...plan.input, sequencer: rogue.address, stateRoot: wrongRoot })]);
+  steps.push({ attack: A, step: `ROGUE submits batch ${plan.input.batchIndex} with a wrong state root`, verdict: "ACCEPTED", where: "chain", evidence: { txHash: sub.txHash, stateRoot: bytesToHex(wrongRoot).slice(0, 16), honestRoot: bytesToHex(plan.input.stateRoot).slice(0, 16) } });
+
+  const target = `batch ${plan.input.batchIndex}`;
+  let c: (typeof watchtower.challenges)[number] | undefined;
+  let after = await rest.getBatch(d.rollupId, plan.input.batchIndex);
+  for (let i = 0; i < 40 && !c && after.status !== "rejected"; i++) {
+    await watchtower.sync();
+    c = watchtower.challenges.find((x) => x.target === target);
+    if (!c) await new Promise((r) => setTimeout(r, 1_500));
+    after = await rest.getBatch(d.rollupId, plan.input.batchIndex);
+  }
+  if (c?.txHash) for (let i = 0; i < 10 && after.status !== "rejected"; i++) {
+    await new Promise((r) => setTimeout(r, 1_500));
+    after = await rest.getBatch(d.rollupId, plan.input.batchIndex);
+  }
   const bondAfter = (await rest.getSubmitterBond(d.rollupId, rogue.address)).amount;
   steps.push({
     attack: A, step: "watchtower sends MsgChallengeBatch with the qledger fraud proof", verdict: after.status === "rejected" ? "REFUSED" : "NOT REFUSED", where: "chain",
-    claim: { id: "chain-fraud-slash", layer: "native", txKey: "challengeTx" },
+    // Only our own successful challenge backs the claim; a public challenger may get there first.
+    ...(c?.txHash && !c.code ? { claim: { id: "chain-fraud-slash", layer: "native" as const, txKey: "challengeTx" } } : {}),
     evidence: { challengeTx: c?.txHash ?? "none", code: c?.code ?? -1, batchStatus: after.status, rogueBondLeft: bondAfter, ...(c?.error ? { error: c.error } : {}) },
   });
   return steps;

@@ -1,0 +1,40 @@
+{
+  "name": "bad-batch run 1",
+  "note": "Live testnet run (qorechain-diana). Lost the race: a public network challenger proved the fraud 11 blocks after the bad batch, while our watchtower was still replaying history. Run 2 pre-syncs the watchtower.",
+  "at": "2026-11-20T12:38:39.061Z",
+  "steps": [
+    {
+      "attack": "bad-batch run 1",
+      "step": "ROGUE bonds as a batch submitter",
+      "verdict": "ACCEPTED",
+      "where": "chain",
+      "evidence": {
+        "txHash": "37A1994FF315CB79335666F60233FECA4106DB26474454C84D40783A43099E7C",
+        "amount": "1000000000"
+      }
+    },
+    {
+      "attack": "bad-batch run 1",
+      "step": "ROGUE submits batch 36 with a wrong state root",
+      "verdict": "ACCEPTED",
+      "where": "chain",
+      "evidence": {
+        "txHash": "EB405A53C17C947F18A42E4C73E442CE253B1F2C7E2360B61E0AE57382CF85BA",
+        "stateRoot": "f4ab2ea726d24c0d",
+        "honestRoot": "0bab2ea726d24c0d"
+      }
+    },
+    {
+      "attack": "bad-batch run 1",
+      "step": "a public network challenger (not ours) sends MsgChallengeBatch first; our watchtower is still replaying",
+      "verdict": "REFUSED",
+      "where": "chain",
+      "evidence": {
+        "txHash": "2F22ABA7023D5FD2C640980B0DAF4FE8230636A3960C784F65CABE552A03DE81",
+        "challenger": "qor1ua2dl0nuf3qxr5yfhr3x9ah5cdh9vw7qczvdj5",
+        "batchStatus": "rejected",
+        "rogueBondLeft": "0"
+      }
+    }
+  ]
+}

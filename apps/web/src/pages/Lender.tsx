@@ -7,6 +7,10 @@ import type { FeedMeta, Hex } from "../lib/types";
 import { FEEDS } from "../lib/view";
 import { useData } from "../lib/useData";
 
+const USE_IT = `IPriceFeed feed = IPriceFeed(PRICE_FEED);
+// Reverts unless the latest fETH round is final and at most 10 minutes old.
+(uint128 price, uint64 round) = feed.readFinal(1, 600);`;
+
 /** PriceFeed.latest() status codes, in the order of the contract's Status enum. */
 const STATUS = ["none", "pending", "final", "corrected"] as const;
 const MAX_AGE = 600n;
@@ -51,9 +55,16 @@ export function Lender({ priceFeed, scoutLend }: { priceFeed: Hex | null; scoutL
         <span className="kicker">Lending desk · read only</span>
         <h1 className="headline sm">A lender that only trusts a final price</h1>
         <p className="deck">
-          ScoutLend lends fUSD against fETH. It reads <code>PriceFeed.readFinal</code>, which reverts while a round is
-          pending, challenged or older than {Number(MAX_AGE) / 60} minutes. So a forged or disputed price never reaches a loan.
+          ScoutLend lends fUSD against fETH. It takes only a price that is final and under {Number(MAX_AGE) / 60} minutes old, so
+          a forged or disputed price never reaches a loan.
         </p>
+        <details style={{ marginTop: 12 }}>
+          <summary>Show details</summary>
+          <p className="note" style={{ maxWidth: "var(--measure)" }}>
+            It reads <code>PriceFeed.readFinal</code>, which reverts while a round is pending, challenged or older than
+            {" "}{Number(MAX_AGE) / 60} minutes. Age is the time since the round's close, as PriceFeed records it.
+          </p>
+        </details>
       </header>
       {!priceFeed ? (
         <Empty>PriceFeed is not deployed yet. This view reads it straight from the EVM once deployments/diana.json lists it.</Empty>
@@ -83,7 +94,6 @@ export function Lender({ priceFeed, scoutLend }: { priceFeed: Hex | null; scoutL
               </table>
             </div>
             <p className="note" style={{ marginTop: 10 }}>
-              Age is the time since the round's close, as PriceFeed records it; past {Number(MAX_AGE) / 60} minutes readFinal reverts.
               PriceFeed <Hash value={priceFeed} keep={6} />{scoutLend && <> · ScoutLend <Hash value={scoutLend} keep={6} /></>}
             </p>
           </section>
@@ -104,6 +114,13 @@ export function Lender({ priceFeed, scoutLend }: { priceFeed: Hex | null; scoutL
           </section>
         </div>
       )}
+      <section aria-labelledby="use-h">
+        <Label id="use-h" aside="Solidity, QoreChain EVM">Use the feed</Label>
+        <pre className="code">{USE_IT}</pre>
+        <p className="note" style={{ marginTop: 10 }}>
+          A pending, disputed or stale round never reaches your contract: <code>readFinal</code> reverts instead.
+        </p>
+      </section>
     </div>
   );
 }

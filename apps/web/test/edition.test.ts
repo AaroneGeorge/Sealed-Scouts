@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  allFlagged, batchFraudOf, challengeEvidence, evidenceRounds, checkTally, correctionOf, dateline, feedState, flaggedRounds, formatAge, formatChange, formatQor,
+  allFlagged, attackSummary, batchFraudOf, medianChallengeOf, recentRounds, towerNumbers, challengeEvidence, evidenceRounds, checkTally, correctionOf, dateline, feedState, flaggedRounds, formatAge, formatChange, formatQor,
   fraudProofOf, fraudUpheldOf, gapBetween, gapLabel, gapMeansPause, isEvmTx, windowGaps, leadOf, pauseSpan, roundGaps, unpostedRuns, upheldRows, verdictOf, replayNote, roundHeadline, runCounts, seriesOf, spell, tickerOf,
 } from "../src/lib/edition";
 import type { AttackRun, TowerRound, TowerStatus } from "../src/lib/types";
@@ -131,21 +131,107 @@ describe("corrections", () => {
 });
 
 describe("leadOf", () => {
-  it("writes the headline from the newest settled round and notes a newer unsettled one", () => {
+  it("writes the headline from the newest settled round and a plain two-sentence deck", () => {
     const l = leadOf(status([r("34"), r("35", { feedStatus: "pending" })]));
     expect(l.headline).toBe("fETH settles at $1,760.00 in round 34");
-    expect(l.deck).toMatch(/^Three sealed reports were opened/);
-    expect(l.deck).toMatch(/Round 35 is still pending on PriceFeed\.$/);
+    expect(l.deck).toBe("Three scouts sealed their prices, so none could copy another. The chain checked the post-quantum signature and the price is final.");
+    expect(l.kicker).toBe("Price oracle · round 34");
   });
   it("says so when a correction set the price", () => {
-    expect(leadOf(status([r("5", { verdict: "corrected", feedStatus: "corrected" })])).headline).toMatch(/after round 5 was corrected$/);
+    const l = leadOf(status([r("5", { verdict: "corrected", feedStatus: "corrected" })]));
+    expect(l.headline).toMatch(/after round 5 was corrected$/);
+    expect(l.deck).toMatch(/A challenge replaced the operator's wrong figure on chain, and the corrected price is final\.$/);
+  });
+  it("adds a sentence for a newer disputed round", () => {
+    const l = leadOf(status([r("34"), r("35", { verdict: "median-wrong", feedStatus: "pending" }), r("36", { verdict: "root-wrong" })]));
+    expect(l.deck).toMatch(/ Rounds 35, 36 are disputed: the watchtower's replay disagrees with what was posted\.$/);
+    expect(leadOf(status([r("34"), r("35", { verdict: "median-wrong" })])).deck).toMatch(/ Round 35 is disputed:/);
+  });
+  it("says when the feed has paused", () => {
+    expect(leadOf(status([r("34")]), { paused: true }).deck).toMatch(/ The feed has paused, so this is its last word\.$/);
+    expect(leadOf(status([r("34")])).deck).not.toMatch(/paused/);
   });
   it("claims nothing when no round has settled", () => {
+    const l = leadOf(status([r("1", { verdict: "not-posted", feedStatus: null })]));
+    expect(l.headline).toBe("No price has settled yet");
+    expect(l.deck).toBe("The watchtower has replayed one round; none is final yet.");
+  });
+  it("calls a lone pending round pending", () => {
     const l = leadOf(status([r("1", { feedStatus: "pending" })]));
     expect(l.headline).toBe("No price has settled yet");
-    expect(l.deck).toMatch(/one round;/);
+    expect(l.deck).toBe("Round 1 is posted and pending. No lender can use it until its challenge window ends.");
   });
   it("spells small numbers", () => expect([spell(0), spell(3), spell(12)]).toEqual(["no", "three", "12"]));
+});
+
+describe("front page summaries", () => {
+  const live = "Live testnet run (qorechain-diana).";
+  const step = (attack: string, s: string, verdict: AttackRun["steps"][number]["verdict"], evidence: Record<string, string | number> = {}) =>
+    ({ attack, step: s, verdict, where: "chain" as const, evidence });
+  const keys: AttackRun = { name: "stolen-keys", note: live, at: "", steps: Array.from({ length: 9 }, (_, i) => step("stolen-keys", `SCOUT${i % 3 + 1}: post`, "REFUSED")) };
+  const evil: AttackRun = { name: "evil-median", note: live, at: "", steps: [
+    step("evil-median", "operator's wrong median in round 5 challenged", "REFUSED", { challengeTx: `0x${"a".repeat(64)}`, feedStatus: 3 }),
+  ] };
+  const batch: AttackRun = { name: "bad-batch", note: live, at: "", steps: [
+    step("bad-batch", "ROGUE bonds as a batch submitter", "ACCEPTED", { txHash: "D03E", amount: "1000000000" }),
+    step("bad-batch", "ROGUE submits batch 36 with a wrong state root", "ACCEPTED", { txHash: "541B", stateRoot: "f4", honestRoot: "0b" }),
+    step("bad-batch", "watchtower sends MsgChallengeBatch", "REFUSED", { challengeTx: "2E65", code: 0, batchStatus: "rejected", rogueBondLeft: "0" }),
+  ] };
+  const upheld = [{ batchIndex: 36, submitter: "q", challenger: "qor1tower", slashedUqor: "1000000000", challengerRewardUqor: "500000000", txHash: "2E65", height: "1", time: "t" }];
+
+  it("words the three attacks from the evidence and the feed", () => {
+    const s = status([r("1")], { batches: { upheld } as TowerStatus["batches"] });
+    expect(attackSummary([keys, evil, batch], s).map((a) => [a.id, a.line, a.known])).toEqual([
+      ["stolen-keys", "9 of 9 forged posts refused", true],
+      ["lying-operator", "wrong price corrected, bond slashed", true],
+      ["bad-batch", "1,000 QOR bond slashed by our watchtower", true],
+    ]);
+  });
+  it("falls back to the run's own record, then to saying nothing is on record", () => {
+    // No upheld event in the feed: the run's rejected batch and empty bond stand in.
+    expect(attackSummary([batch])[2]!.line).toBe("1,000 QOR bond slashed by our watchtower");
+    const noSlash = { ...batch, steps: batch.steps.map((s) => (s.evidence.challengeTx ? { ...s, evidence: { challengeTx: "2E65", batchStatus: "submitted" } } : s)) };
+    expect(attackSummary([noSlash])[2]!.line).toBe("fraud proof sent by our watchtower");
+    const half = { ...keys, steps: [...keys.steps.slice(0, 8), step("stolen-keys", "x", "NOT REFUSED")] };
+    expect(attackSummary([half])[0]!.line).toBe("8 of 9 forged posts refused; 1 not refused");
+    const pending = { ...evil, steps: [{ ...evil.steps[0]!, evidence: { challengeTx: `0x${"a".repeat(64)}`, feedStatus: 1 } }] };
+    expect(attackSummary([pending])[1]!.line).toBe("wrong price challenged");
+    expect(attackSummary(undefined).map((a) => [a.line, a.known])).toEqual(Array(3).fill(["no live run on record yet", false]));
+    // Dry runs never count.
+    expect(attackSummary([{ ...keys, note: "DRY RUN" }])[0]!.known).toBe(false);
+  });
+  it("says the evidence could not be loaded, not that no run is on record", () => {
+    expect(attackSummary(undefined, undefined, { failed: true }).map((a) => [a.line, a.known])).toEqual(Array(3).fill(["evidence could not be loaded", false]));
+    // Runs kept from an earlier good load still speak for themselves after a failed refresh.
+    expect(attackSummary([keys], undefined, { failed: true }).map((a) => a.line)).toEqual(["9 of 9 forged posts refused", "no live run on record yet", "no live run on record yet"]);
+  });
+  it("finds the median challenge and its round", () => {
+    expect(medianChallengeOf([evil])).toMatchObject({ round: "5", corrected: true, refused: true });
+    expect(medianChallengeOf([keys])).toBeUndefined();
+  });
+
+  it("gives at most three watchtower figures", () => {
+    const s = { rounds: { replayed: 347, corrected: 1, medianWrong: 0, rootWrong: 0 }, batches: { fraud: 0, upheldOnChain: 2 } } as TowerStatus;
+    expect(towerNumbers(s).map((n) => [n.label, n.value, n.alert])).toEqual([
+      ["Rounds replayed", 347, false], ["Frauds proven on chain", 2, false], ["Fraud still standing", 0, false],
+    ]);
+    const old = { rounds: { replayed: 9, corrected: 1, medianWrong: 1, rootWrong: 0 }, batches: { fraud: 1 } } as TowerStatus;
+    expect(towerNumbers(old).map((n) => [n.label, n.value, n.alert])).toEqual([
+      ["Rounds replayed", 9, false], ["Rounds corrected on PriceFeed", 1, false], ["Fraud still standing", 2, true],
+    ]);
+  });
+
+  it("lists the last five rounds, newest first, with a gap only between shown rows", () => {
+    const s = status([r("1"), r("2"), r("40"), r("41"), r("42", { verdict: "median-wrong", feedStatus: "pending" }), r("60"), r("61", { feedStatus: "pending", leftOut: 1 })]);
+    const rows = recentRounds(s);
+    expect(rows.map((x) => x.round)).toEqual(["61", "60", "42", "41", "40"]);
+    expect(rows.map((x) => x.gap && gapLabel(x.gap))).toEqual([undefined, "No rounds 43–59", undefined, undefined, undefined]);
+    expect(rows[0]).toMatchObject({ status: "pending", disputed: false, price: "176000000000", reports: 3, leftOut: 1 });
+    expect(rows[2]).toMatchObject({ status: "pending", disputed: true });
+    // The gap 3–39 lies below the oldest shown row, so it is not marked.
+    expect(recentRounds(status([r("1"), r("2")]), 5).map((x) => x.round)).toEqual(["2", "1"]);
+    expect(recentRounds(status([r("1"), r("2")]), 5, 2)[0]!.price).toBeUndefined();
+  });
 });
 
 describe("roundHeadline", () => {

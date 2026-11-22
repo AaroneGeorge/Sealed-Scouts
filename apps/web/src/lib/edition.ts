@@ -1,7 +1,8 @@
 import { bpsFrom, formatPrice } from "./format";
 import type { CheckState } from "./receipt";
 import type { AttackRun, FeedStatus, RoundVerdict, TowerRound, TowerStatus, UpheldBatch } from "./types";
-import { VERDICT, displayStatus, latestPrices, roundStatus, symbolOf } from "./view";
+import { attackTally } from "./pipeline";
+import { VERDICT, displayStatus, latestPrices, roundStatus, symbolOf, type DisplayStatus } from "./view";
 
 /**
  * Pure helpers for the newspaper layout: everything a headline, the ticker, the chart or the corrections box says is
@@ -155,22 +156,25 @@ const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eig
 export const spell = (n: number) => (Number.isInteger(n) && n >= 0 && n < 10 ? WORDS[n]! : n.toLocaleString("en-US"));
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-const STILL: Record<string, string> = {
-  pending: "is still pending on PriceFeed", "not-posted": "is not posted yet", sealed: "is still sealed",
-  "no-quorum": "had too few valid reports", final: "is final", corrected: "was corrected",
-};
-
 export interface Lead { kicker: string; headline: string; deck: string; round?: string }
 
-/** The front page's lead story, worded from the newest settled round. */
-export function leadOf(s: TowerStatus): Lead {
+/**
+ * The front page's lead story, worded from the newest settled round in plain words: what the scouts did and what the
+ * chain checked. A newer disputed round, or a paused feed, adds one sentence so the story never reads better than the
+ * data. `paused` comes from feedState and is left out for the sample feed.
+ */
+export function leadOf(s: TowerStatus, opts: { paused?: boolean } = {}): Lead {
   const prices = latestPrices(s);
   const newest = s.latestRounds[s.latestRounds.length - 1];
+  const pausedNote = opts.paused ? " The feed has paused, so this is its last word." : "";
   if (prices.length === 0) {
+    const pending = newest?.feedStatus === "pending" && (newest.verdict === "match" || newest.verdict === "not-posted");
     return {
       kicker: "Price oracle",
       headline: "No price has settled yet",
-      deck: `The watchtower has replayed ${spell(s.rounds.replayed)} round${s.rounds.replayed === 1 ? "" : "s"}; none is final on PriceFeed with a replay that agrees.`,
+      deck: (pending
+        ? `Round ${newest!.round} is posted and pending. No lender can use it until its challenge window ends.`
+        : `The watchtower has replayed ${spell(s.rounds.replayed)} round${s.rounds.replayed === 1 ? "" : "s"}; none is final yet.`) + pausedNote,
       round: newest?.round,
     };
   }
@@ -179,13 +183,17 @@ export function leadOf(s: TowerStatus): Lead {
   const headline = p.status === "corrected"
     ? `${sym} stands at $${formatPrice(p.price)} after round ${p.round} was corrected`
     : `${sym} settles at $${formatPrice(p.price)} in round ${p.round}`;
-  let deck = `${cap(spell(p.count))} sealed report${p.count === 1 ? " was" : "s were"} opened after the window closed. ` +
-    `The median is bound into the batch's ML-DSA-87 anchor signature, which PriceFeed checked on chain with pqcVerify; ` +
-    `the round is ${p.status}, and the watchtower's replay agrees.`;
-  if (newest && newest.round !== p.round) {
-    deck += ` Round ${newest.round} ${STILL[displayStatus(newest.feedStatus, newest.verdict)] ?? "is not settled"}.`;
+  const n = p.count;
+  let deck = `${cap(spell(n))} scout${n === 1 ? " sealed its price" : "s sealed their prices"}, so none could copy another. ` +
+    (p.status === "corrected"
+      ? "A challenge replaced the operator's wrong figure on chain, and the corrected price is final."
+      : "The chain checked the post-quantum signature and the price is final.");
+  const disputed = s.latestRounds.filter((r) => BigInt(r.round) > BigInt(p.round) && (r.verdict === "median-wrong" || r.verdict === "root-wrong"));
+  if (disputed.length > 0) {
+    const ids = disputed.map((r) => r.round);
+    deck += ` Round${ids.length === 1 ? "" : "s"} ${ids.join(", ")} ${ids.length === 1 ? "is" : "are"} disputed: the watchtower's replay disagrees with what was posted.`;
   }
-  return { kicker: `Price oracle · round ${p.round}`, headline, deck, round: p.round };
+  return { kicker: `Price oracle · round ${p.round}`, headline, deck: deck + pausedNote, round: p.round };
 }
 
 /** "Friday 20 November 2026" and "10:52 UTC", in UTC so every reader sees the same edition. */
@@ -415,4 +423,94 @@ export function checkTally(checks: { state: CheckState }[]) {
   const text = ([[counts.passed, "passed"], [counts.failed, "failed"], [counts.skipped, "skipped"]] as const)
     .filter(([k]) => k > 0).map(([k, w]) => `${k} ${w}`).join(", ");
   return { ...counts, text };
+}
+
+/** The counted live run of one attack, by the name its evidence file gives it. */
+export const liveRunOf = (runs: AttackRun[] | undefined, name: string) =>
+  (runs ?? []).find((r) => /^Live/i.test(r.note) && runCounts(r) && r.name === name);
+
+/** The step of a live median-attack run that carries the challenge transaction, and the round it names. */
+export function medianChallengeOf(runs: AttackRun[] | undefined) {
+  const run = liveRunOf(runs, "evil-median");
+  const step = run?.steps.find((s) => isEvmTx(s.evidence.challengeTx));
+  if (!run || !step) return undefined;
+  return {
+    run, step, tx: String(step.evidence.challengeTx), refused: step.verdict === "REFUSED",
+    round: /\bround (\d+)\b/.exec(step.step)?.[1],
+    // PriceFeed's Status enum: none, pending, final, corrected.
+    corrected: step.verdict === "REFUSED" && Number(step.evidence.feedStatus) === 3,
+  };
+}
+
+export type AttackId = "stolen-keys" | "lying-operator" | "bad-batch";
+export interface AttackLine { id: AttackId; title: string; line: string; known: boolean }
+
+/**
+ * The front page's "Attacks stopped" box: one line per attack, worded from the evidence and the feed. An attack with
+ * no counted live run says so instead of claiming a result; when the evidence could not be loaded at all (`failed`),
+ * every line says that rather than "no run on record".
+ */
+export function attackSummary(runs: AttackRun[] | undefined, s?: TowerStatus, opts: { failed?: boolean } = {}): AttackLine[] {
+  const none = opts.failed && !runs ? "evidence could not be loaded" : "no live run on record yet";
+  const keys = liveRunOf(runs, "stolen-keys");
+  const t = keys ? attackTally(keys) : undefined;
+  const keysLine = !t ? none
+    : `${t.refused} of ${t.attempts} forged posts refused${t.notRefused ? `; ${t.notRefused} not refused` : ""}`;
+
+  const m = medianChallengeOf(runs);
+  const medianLine = !m ? none : m.corrected ? "wrong price corrected, bond slashed" : m.refused ? "wrong price challenged" : "challenge not upheld";
+
+  const f = batchFraudOf(runs);
+  const ours = upheldRows(s?.batches.upheld, runs).find((u) => u.ours);
+  const slashed = formatQor(ours?.slashedUqor)
+    ?? (f?.batchStatus === "rejected" && f.bondLeft === "0" ? formatQor(f.bondAmount) : undefined);
+  const batchLine = !f ? none : slashed ? `${slashed} bond slashed by our watchtower` : "fraud proof sent by our watchtower";
+
+  return [
+    { id: "stolen-keys", title: "Stolen keys", line: keysLine, known: !!t },
+    { id: "lying-operator", title: "Lying operator", line: medianLine, known: !!m },
+    { id: "bad-batch", title: "Bad batch", line: batchLine, known: !!f },
+  ];
+}
+
+/** At most three watchtower figures for the front page; `alert` when a non-zero figure is bad news. */
+export function towerNumbers(s: TowerStatus): { label: string; value: number; alert: boolean }[] {
+  const standing = s.batches.fraud + s.rounds.medianWrong + s.rounds.rootWrong;
+  const proven = s.batches.upheldOnChain;
+  return [
+    { label: "Rounds replayed", value: s.rounds.replayed, alert: false },
+    // Older feeds lack the chain's count; then the corrected rounds stand in rather than a 0.
+    proven !== undefined
+      ? { label: "Frauds proven on chain", value: proven, alert: false }
+      : { label: "Rounds corrected on PriceFeed", value: s.rounds.corrected, alert: false },
+    { label: "Fraud still standing", value: standing, alert: standing > 0 },
+  ];
+}
+
+export interface RecentRow {
+  round: string;
+  status: DisplayStatus;
+  /** The replay disagrees with what was posted (and no correction has landed). */
+  disputed: boolean;
+  /** fETH/USD replayed median. */
+  price?: string;
+  reports: number;
+  leftOut: number;
+  /** A gap between this row and the (shown) row below it. */
+  gap?: RoundGap;
+}
+
+/** The newest `n` rounds for the front page, newest first, with any gap that falls between two shown rows. */
+export function recentRounds(s: TowerStatus, n = 5, feedId = 1): RecentRow[] {
+  const gaps = windowGaps(s);
+  const rows = s.latestRounds.slice(-n).reverse();
+  return rows.map((r, i) => ({
+    round: r.round,
+    status: displayStatus(r.feedStatus, r.verdict),
+    disputed: r.verdict === "median-wrong" || r.verdict === "root-wrong",
+    price: r.medians.find((m) => m.feedId === feedId)?.price,
+    reports: r.reports,
+    leftOut: r.leftOut,
+    gap: i < rows.length - 1 ? gaps.find((g) => g.after === r.round) : undefined,
+  }));
 }

@@ -30,7 +30,12 @@ function Station({ n, title, term, step, children, plate, last = false }: {
       {step && (
         <div className="now">
           <b>Now</b>
-          <span className={step.tone === "fail" ? "bad" : step.lit ? "" : "muted"}>{step.text}</span>
+          {/* The short label keeps the line to one line; the full sentence is there for screen readers, and on hover. */}
+          <span className={step.tone === "fail" ? "bad" : step.lit ? "" : "muted"} title={step.text}>
+            {step.short && step.short !== step.text
+              ? <><span aria-hidden="true">{step.short}</span><span className="sr-only">{step.text}</span></>
+              : step.text}
+          </span>
         </div>
       )}
       {!last && <Arrow />}
@@ -50,12 +55,13 @@ export function Explainer({ p, rollupId }: { p: Pipeline; rollupId: string }) {
   return (
     <div>
       <ol className="explainer" aria-label={`How a price is made, with round ${p.round}'s state at each step`} style={{ listStyle: "none", padding: 0, margin: 0 }}>
-        <Station n={1} title="Scouts" term="ML-KEM-1024" step={{ lit: p.scouts.length > 0, tone: "pass", short: "", text: p.scouts.length
+        <Station n={1} title="Scouts" term="ML-KEM-1024" step={{ lit: p.scouts.length > 0, tone: "pass", short: p.scouts.length
+          ? `${p.scouts.length} scout${p.scouts.length === 1 ? "" : "s"} posted` : "no reports", text: p.scouts.length
           ? `${p.scouts.length} report${p.scouts.length === 1 ? "" : "s"} posted in round ${p.round}` : `no reports in round ${p.round}` }}
           plate={scouts.length === 0 ? <Envelope x={68} y={34} faint /> : scouts.map((s, i) => (
             <Envelope key={s.key} x={startX + i * gap} y={30 + (i % 2) * 12} title={s.title} />
           ))}>
-          Bonded scouts each seal a price report to the opener's key, so nobody can copy an answer before the window closes.
+          Each scout seals its price, so nobody can copy it.
         </Station>
         <Station n={2} title="Rollup inbox" term={rollupId} step={p.inbox}
           plate={<>
@@ -64,7 +70,7 @@ export function Explainer({ p, rollupId }: { p: Pipeline; rollupId: string }) {
             {Array.from({ length: inTray }, (_, i) => <Envelope key={i} x={45 + i * 12} y={50 - i * 4} />)}
             {inTray === 0 && <Envelope x={68} y={50} faint />}
           </>}>
-          QoreChain orders and stamps every post. Only the size of a report is public until the window closes.
+          The chain orders every sealed report; only its size shows.
         </Station>
         <Station n={3} title="Median and anchor" term="ML-DSA-87" step={p.median}
           plate={<>
@@ -74,7 +80,7 @@ export function Explainer({ p, rollupId }: { p: Pipeline; rollupId: string }) {
             <rect className="paper" x="44" y="58" width="82" height="24" />
             <text className="tx" x="85" y="74" textAnchor="middle">ML-DSA-87</text>
           </>}>
-          After close the operator opens every report. The median is bound into the batch's ML-DSA-87 anchor signature.
+          When the window closes, the reports are opened and the median is signed.
         </Station>
         <Station n={4} title="PriceFeed" term="pqcVerify" step={p.feed}
           plate={<>
@@ -82,8 +88,7 @@ export function Explainer({ p, rollupId }: { p: Pipeline; rollupId: string }) {
             {[26, 36, 46].map((yy) => <path key={yy} className="ink" d={`M58 ${yy} H112`} />)}
             <path className="ink" d="M64 64 l9 9 l20 -20" strokeWidth={2.4} />
           </>}>
-          A contract on QoreChain's EVM checks that same signature on chain before it accepts the price. A new price is
-          pending until its challenge window ends.
+          A contract checks the post-quantum signature on chain, then waits out a challenge window.
         </Station>
         <Station n={5} title="ScoutLend" term="readFinal" step={p.lend} last
           plate={<>
@@ -91,15 +96,12 @@ export function Explainer({ p, rollupId }: { p: Pipeline; rollupId: string }) {
             <path className="ink" d="M55 66 V74 M115 66 V74" />
             <ellipse className="ink" cx="85" cy="74" rx="30" ry="8" />
           </>}>
-          A small lender reads only a final, fresh price. Anything pending, disputed or stale makes it revert.
+          The lender takes only a final, fresh price.
         </Station>
       </ol>
       <div className="watch-strip">
         <h3>Watchtower</h3>
-        <p>
-          Anyone can replay every round and batch from chain data. A wrong median is challenged in PriceFeed, which
-          recomputes it and slashes the operator's bond; a wrong ledger root is challenged with the chain's fraud proof.
-        </p>
+        <p>Anyone can replay every round from chain data and challenge a wrong price or batch; the cheat loses its bond.</p>
         <div className="now"><span className="st" style={{ marginRight: 6, color: "var(--ink-2)" }}>Now</span>
           <span className={p.replay.tone === "fail" ? "bad" : ""}>Round {p.round}: {p.replay.text}</span>
         </div>

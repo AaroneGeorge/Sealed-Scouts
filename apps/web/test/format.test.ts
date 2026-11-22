@@ -29,4 +29,11 @@ describe("parseRoute", () => {
     expect(r.query.get("batch")).toBe("28");
   });
   it("falls back to rounds", () => expect(parseRoute("#/nope").page).toBe("rounds"));
+  it("reads an anchor after a second #", () => {
+    expect(parseRoute("#/attacks#bad-batch")).toMatchObject({ page: "attacks", anchor: "bad-batch" });
+    expect(parseRoute("#/verify?batch=2#x")).toMatchObject({ page: "verify", anchor: "x" });
+    expect(parseRoute("#/verify?batch=2#x").query.get("batch")).toBe("2");
+    expect(parseRoute("#/attacks").anchor).toBeUndefined();
+    expect(parseRoute("#/attacks#<b>").anchor).toBeUndefined();
+  });
 });

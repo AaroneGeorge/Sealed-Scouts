@@ -61,7 +61,7 @@ export function App() {
               {theme === "dark" ? "Day edition (light)" : "Evening edition (dark)"} <span aria-hidden="true">→</span>
             </button>
           </div>
-          <Nameplate status={status.data} sample={sample} rollupId={rollupId} />
+          <Nameplate status={status.data} sample={sample} />
           <Dateline status={status.data} loading={status.loading} sample={sample} />
           <nav className="sections" aria-label="Sections">
             {NAV.map((n) => <a key={n.page} href={n.href} aria-current={current === n.page ? "page" : undefined}>{n.label}</a>)}
@@ -82,7 +82,7 @@ export function App() {
             <Empty>{status.loading ? "Loading the feed…" : status.missing ? "The watchtower has not published a feed yet." : `Feed unavailable: ${status.error}`}</Empty>)}
           {route.page === "round" && <Round id={route.param!} rollupId={rollupId} priceFeed={priceFeed} mode={status.data?.mode} />}
           {route.page === "verify" && <Verify defaultRollup={deployments.data?.rollupId ?? DEFAULT_ROLLUP} query={route.query} />}
-          {route.page === "attacks" && <Attacks />}
+          {route.page === "attacks" && <Attacks status={status.data} anchor={route.anchor} />}
           {route.page === "lender" && <Lender priceFeed={priceFeed} scoutLend={scoutLend} />}
         </main>
       </div>
@@ -96,7 +96,7 @@ export function App() {
   );
 }
 
-function Nameplate({ status, sample, rollupId }: { status?: TowerStatus; sample: boolean; rollupId: string }) {
+function Nameplate({ status, sample }: { status?: TowerStatus; sample: boolean }) {
   const latest = status?.rounds.latest;
   const now = useNow();
   const feed = status ? feedState(status.updatedAt, now) : undefined;
@@ -104,14 +104,13 @@ function Nameplate({ status, sample, rollupId }: { status?: TowerStatus; sample:
     <div className="nameplate-row">
       <div className="ear">
         <b>{latest ? `Round ${latest} edition` : "Edition pending"}</b>
-        Rollup {rollupId}
       </div>
       <a href="#/" className="nameplate" aria-label="Sealed Scouts, front page">Sealed <Seal size={48} /> Scouts</a>
       <div className="ear ear-r">
         {!status ? <><b>Feed not loaded</b>Watchtower status unknown</>
           : sample ? <><b className="state-sample">Sample edition</b>Simulated history, not chain data</>
           : feed?.paused ? <><b className="state-sample">Feed paused</b>No update for {formatAge(feed.ageMs)}</>
-          : <><b>Live testnet feed</b>qorechain-diana · watchtower in {status.mode} mode</>}
+          : <><b>Live testnet feed</b>QoreChain testnet</>}
       </div>
     </div>
   );
@@ -127,7 +126,6 @@ function Dateline({ status, loading, sample }: { status?: TowerStatus; loading: 
       {status && (
         <span>
           {paused ? <b className="bad">Feed paused: last update {d?.time}</b> : sample ? `Sample feed written ${d?.time}` : `Feed updated ${d?.time}`}
-          {" "}· replayed to height {BigInt(status.chainHeight).toLocaleString("en-US")}
         </span>
       )}
     </div>
@@ -153,7 +151,7 @@ function Ticker({ status }: { status: TowerStatus }) {
         {items.length === 0 ? <span className="note">No round is final with a replay that agrees yet.</span> : (
           <>
             {items.map((t) => <TickerEntry key={t.feedId} t={t} />)}
-            <span className="note">Round {items[0]!.round}, {items[0]!.status}{items[0]!.prevRound ? `; change from round ${items[0]!.prevRound}` : ""}</span>
+            <span className="note">Round {items[0]!.round}, {items[0]!.status}</span>
           </>
         )}
       </div>

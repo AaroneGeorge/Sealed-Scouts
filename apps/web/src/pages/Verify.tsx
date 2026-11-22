@@ -30,14 +30,21 @@ export function Verify({ defaultRollup, query }: { defaultRollup: string; query:
     <div className="stack" style={{ gap: 30 }}>
       <header>
         <span className="kicker">Fact check · no wallet needed</span>
-        <h1 className="headline sm">Is this batch's settlement receipt genuine? Check it yourself.</h1>
+        <h1 className="headline sm">Is this receipt genuine? Check it yourself.</h1>
         <p className="deck">
-          Your browser reads the rollup, the batch and the anchor from QoreChain, rebuilds the exact bytes the creator
-          signed, and asks the chain's own <code>pqcVerify</code> precompile whether the ML-DSA-87 signature holds.
+          Your browser reads the batch from QoreChain and asks the chain itself whether its post-quantum signature holds.
+          No wallet, and no need to trust our server.
         </p>
+        <details style={{ marginTop: 12 }}>
+          <summary>Show details</summary>
+          <p className="note" style={{ maxWidth: "var(--measure)" }}>
+            It reads the rollup, the batch and the anchor, rebuilds the exact bytes the creator signed, and asks the
+            chain's own <code>pqcVerify</code> precompile whether the ML-DSA-87 signature holds.
+          </p>
+        </details>
       </header>
       <section aria-labelledby="fc-h">
-        <Label id="fc-h" aside="Pick any live optimistic rollup on the testnet">The receipt</Label>
+        <Label id="fc-h" aside="Any live rollup on the testnet">The receipt</Label>
         <div className="controls" style={{ marginBottom: 20 }}>
           <label className="field">Rollup
             <select value={rollupId} onChange={(e) => { setRollupId(e.target.value); setBatch(""); }}>

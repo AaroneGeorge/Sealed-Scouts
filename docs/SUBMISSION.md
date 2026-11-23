@@ -92,14 +92,15 @@ In order: the operator (rollup creator, sequencer, opener), the watchtower, then
 
 ### Kits and SDKs used
 
-The site checks the repo's `package.json` files and marks what it finds as verified. In each kit's box, tick the **TypeScript** package:
+The site checks the repo's `package.json` files and marks what it finds as verified. Each kit's box lists its packages by language; hover over a checkbox to see the package name. Tick:
 
-- [ ] `@qorechain/rdk`
-- [ ] `@qorechain/sdk`
-- [ ] `@qorechain/evm`
-- [ ] `@qorechain/pqc`
-- [ ] `@qorechain/qoreseal`
-- [ ] `@qorechain/qoresign`
+- [ ] **QoreChain SDK:** the first **TypeScript** box (`@qorechain/sdk`). The second **TypeScript** box in the same kit is `@qorechain/evm`; tick it too. There is no separate EVM kit.
+- [ ] **RDK:** TypeScript (`@qorechain/rdk`)
+- [ ] **PQC:** TypeScript (`@qorechain/pqc`)
+- [ ] **QoreSeal:** TypeScript (`@qorechain/qoreseal`)
+- [ ] **QoreSign:** TypeScript (`@qorechain/qoresign`)
+
+The project page then lists 5 kits as Verified: qorechain-pqc, QoreSeal, QoreSign, RDK and QoreChain SDK.
 
 ### Network features used
 

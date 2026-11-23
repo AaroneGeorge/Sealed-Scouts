@@ -1,5 +1,7 @@
 # Sealed Scouts
 
+[![Built on QoreChain](https://build.qorechain.io/badge/sealed-scouts.svg)](https://build.qorechain.io/p/sealed-scouts)
+
 **Prices that a quantum attacker can't forge and a lazy reporter can't copy.**
 
 Sealed Scouts is a post-quantum price-oracle rollup for [QoreChain](https://qorechain.io), built for the
@@ -9,8 +11,8 @@ QoreChain has no price oracle yet, so no lending, stablecoin or DCA app on it ca
 also the best Q-Day target: whoever forges the reporters' signatures can drain every app that trusts the feed.
 
 **Live demo:** [sealed-scouts.tailcdec7a.ts.net](https://sealed-scouts.tailcdec7a.ts.net) (QoreChain testnet). Its
-Verify tab checks any rollup's settlement receipt on chain, with no wallet. Until our rollup is live, the rounds shown
-are a labelled sample.
+Verify tab checks any rollup's settlement receipt on chain, with no wallet. The rounds shown are live from our rollup,
+sealed-scouts-1.
 
 ![Architecture](docs/images/architecture.svg)
 

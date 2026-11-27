@@ -4,12 +4,25 @@
 #   ops/loop.sh start | stop | status
 # Round timing follows "roundMode" in deployments/diana.json unless SS_LOOP_ARGS says otherwise (default --demo).
 # Logs and pids: $B/run/<name>.log and .pid (B = the folder above the repo).
+# Once ops/install-systemd.sh has installed the services, this drives sealed-scouts.target instead, so the loop is
+# never started twice and comes back at boot.
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="${SS_RUN_ROOT:-$REPO/../run}"
 ARGS="${SS_LOOP_ARGS:---demo}"
 SCOUTS="${SS_SCOUTS:-SCOUT1 SCOUT2 SCOUT3}"
 mkdir -p "$RUN"
+
+if [[ -z "${SS_NO_SYSTEMD:-}" ]] && systemctl cat sealed-scouts.target >/dev/null 2>&1; then
+  units="sealed-scouts-operator.service $(for s in $SCOUTS; do echo "sealed-scouts-scout@$s.service"; done) sealed-scouts-watchtower.service"
+  case "${1:-status}" in
+    start) sudo -n systemctl start sealed-scouts.target $units ;;
+    stop) sudo -n systemctl stop sealed-scouts.target $units ;;
+    status) for u in $units; do printf '%-40s %s\n' "$u" "$(systemctl is-active "$u" || true)"; done ;;
+    *) echo "usage: $0 start|stop|status" >&2; exit 1 ;;
+  esac
+  exit 0
+fi
 
 alive() { [[ -f "$RUN/$1.pid" ]] && kill -0 "$(cat "$RUN/$1.pid")" 2>/dev/null; }
 

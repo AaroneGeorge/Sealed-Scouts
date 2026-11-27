@@ -69,7 +69,10 @@ export async function badBatchLive(opts: { bond?: boolean; demo?: boolean; chain
     source, new FeedWriter(feedDir()), liveChallenger(chain, tower, d.rollupId, d.priceFeed),
   );
   await watchtower.sync();
-  const plan = await planQledgerBatch(rest, { chainId: d.chainId, rollupId: d.rollupId, submitter: rogue.address, ledger: replay.state() });
+  // The plan's tx search starts at the first unconsumed post: an unbounded one stops at the RDK's 5000-tx cap.
+  const consumed = BigInt((await rest.getInbox(d.rollupId)).consumedSequence);
+  const planRest = await chain.inbox.searchWindow(d.rollupId, consumed + 1n);
+  const plan = await planQledgerBatch(planRest, { chainId: d.chainId, rollupId: d.rollupId, submitter: rogue.address, ledger: replay.state() });
   const wrongRoot = Uint8Array.from(plan.input.stateRoot, (b, i) => (i === 0 ? b ^ 0xff : b));
   const sub = await chain.native.sendOrThrow(rogue, [submitBatchMsg({ ...plan.input, sequencer: rogue.address, stateRoot: wrongRoot })]);
   steps.push({ attack: A, step: `ROGUE submits batch ${plan.input.batchIndex} with a wrong state root`, verdict: "ACCEPTED", where: "chain", evidence: { txHash: sub.txHash, stateRoot: bytesToHex(wrongRoot).slice(0, 16), honestRoot: bytesToHex(plan.input.stateRoot).slice(0, 16) } });

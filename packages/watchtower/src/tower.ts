@@ -24,6 +24,14 @@ export interface Challenge { kind: "median" | "batch"; target: string; sent: boo
 /** A round is settled once the feed can no longer change: final, corrected, or no quorum to post. */
 const SETTLED = new Set(["match", "corrected", "no-quorum"]);
 
+/**
+ * Settled, or never posted while a later round is on the feed: PriceFeed only takes rounds above its last one, so
+ * that round can no longer be posted either.
+ */
+const done = (r: { round: bigint; verdict: string; feed?: { status?: string } | null }, postedUpTo: bigint) =>
+  (SETTLED.has(r.verdict) && r.feed?.status !== "pending") || (r.verdict === "not-posted" && r.round < postedUpTo);
+const onFeed = (status: string | undefined) => status !== undefined && status !== "none";
+
 export class Watchtower {
   private entries: InboxEntry[] = [];
   private readonly keys = new Map<string, Uint8Array | undefined>();
@@ -35,6 +43,8 @@ export class Watchtower {
   private readonly challenged = new Set<string>();
   private readonly ledger: LedgerReplay;
   private height = 0n;
+  /** Highest round seen on the feed (posted, final or corrected); -1 = none yet. */
+  private postedUpTo = -1n;
   private upheld: UpheldFraud[] = [];
   private upheldReadAt = 0;
 
@@ -100,7 +110,7 @@ export class Watchtower {
     for (const round of this.roundsWithPosts()) {
       if (this.height < roundWindows(round, this.cfg.params).revealEnd) continue; // reveals may still land
       const prev = this.rounds.get(round);
-      if (prev && SETTLED.has(prev.verdict) && prev.feed?.status !== "pending") continue;
+      if (prev && done(prev, this.postedUpTo)) continue;
       // One round that cannot be read (a failed historical call, a node hiccup) must not stop the others or the
       // batch checks: it is published as "unknown" and retried next pass.
       try {
@@ -123,8 +133,9 @@ export class Watchtower {
     const eligible = this.source.eligibility
       ? await this.source.eligibility(round, w.commitEnd)
       : (scout: string) => (this.cfg.scouts.length === 0 ? this.keys.get(scout) !== undefined : this.cfg.scouts.includes(scout));
-    const check = checkRound(inRound, round, { ...params, pqKeyOf: (s) => this.keys.get(s) }, eligible, await this.source.feedRound(round));
+    const check = checkRound(inRound, round, { ...params, pqKeyOf: (s) => this.keys.get(s) }, eligible, await this.source.feedRound(round, w.revealEnd));
     this.rounds.set(round, check);
+    if (onFeed(check.feed?.status) && round > this.postedUpTo) this.postedUpTo = round;
     if (!prev || prev.verdict !== check.verdict || prev.feed?.status !== check.feed?.status) {
       this.log(`round ${round}: ${check.verdict}${check.leftOut.length ? `, ${check.leftOut.length} report(s) left out of OPEN` : ""}`);
     }
@@ -180,8 +191,36 @@ export class Watchtower {
     }
   }
 
+  /**
+   * Take back the rounds this tower already settled in an earlier run, from the round files it wrote (FeedWriter).
+   * Only rounds that can no longer change are taken (the ones a pass skips anyway), so a restart does not spend
+   * hours re-reading every finished round from the chain. Everything else is checked again as usual.
+   */
+  restore(records: Record<string, any>[]): number {
+    const valid = records.filter((r) => typeof r.round === "string" && /^\d+$/.test(r.round));
+    for (const r of valid) if (onFeed(r.feed?.status) && BigInt(r.round) > this.postedUpTo) this.postedUpTo = BigInt(r.round);
+    let n = 0;
+    for (const r of valid) {
+      const round = BigInt(r.round);
+      if (!done({ round, verdict: r.verdict, feed: r.feed }, this.postedUpTo)) continue;
+      if (this.rounds.has(round)) continue;
+      this.rounds.set(round, {
+        round,
+        verdict: r.verdict,
+        derived: { status: r.status, openHeight: r.openHeight, closeHeight: r.closeHeight, medians: r.medians ?? [], reportsRoot: r.reportsRoot, leaves: r.leaves ?? [] },
+        reports: r.reports ?? [],
+        leftOut: r.operator?.leftOut ?? [],
+        openPosted: Boolean(r.operator?.openPosted),
+        feed: r.feed ?? undefined,
+      } as unknown as RoundCheck);
+      n++;
+    }
+    return n;
+  }
+
   status() {
-    const rounds = [...this.rounds.values()];
+    // Rounds are kept in the order they were first checked; restored ones come first, so sort by number.
+    const rounds = [...this.rounds.values()].sort((a, b) => (a.round < b.round ? -1 : a.round > b.round ? 1 : 0));
     const count = (v: string) => rounds.filter((r) => r.verdict === v).length;
     return {
       updatedAt: new Date().toISOString(),

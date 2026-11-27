@@ -15,7 +15,14 @@ variables (see `.env.example`). Everything in "Check" and "Host the demo" runs w
 | Watchtower, active | yes (`TOWER`) | `npm run watchtower -w @sealed-scouts/watchtower -- --active` | Same, and sends challenges. |
 | Read API + page | no | `npm start -w @sealed-scouts/api` | Serves `apps/web/dist`, the feed and the evidence. |
 
-Long-running processes are started detached, with logs and pids in `run/` (git-ignored):
+The live loop (operator, scouts, one active watchtower) runs as systemd services, so it starts at boot and restarts
+after a crash. `ops/install-systemd.sh [--topup SCRIPT]` writes and enables `sealed-scouts.target`,
+`sealed-scouts-operator.service`, `sealed-scouts-scout@SCOUTn.service` and `sealed-scouts-watchtower.service` (and,
+with `--topup`, a 6-hourly `sealed-scouts-topup.timer`); each loads its keys from `ops/env.local.sh` and logs to
+`run/<name>.log`. After that `ops/loop.sh start|stop|status` drives the services; without them it starts the same
+processes detached, as before.
+
+Other long-running processes are started detached, with logs and pids in `run/` (git-ignored):
 
 ```bash
 setsid nohup npm start -w @sealed-scouts/api > run/api.log 2>&1 < /dev/null & echo $! > run/api.pid
@@ -140,12 +147,19 @@ the watchtower does not start, and the API serves the bundled sample feed and sa
 (`apps/api/fixtures`), which the page labels as sample data. Redeploy once `deployments/diana.json` exists to switch
 to the live feed. The Verify tab reads the real chain either way.
 
-If the container cannot write `/tmp`, mount a folder and point the feed there:
+Keep the feed on persistent storage, so a restart or a redeploy does not start the replay from round 0: on start the
+watchtower takes back the rounds it already settled from the round files in its feed folder (`--no-restore` turns
+that off) and re-reads only the rest from the chain.
 
 ```bash
-dokku storage:mount sealed-scouts /var/lib/dokku/data/storage/sealed-scouts:/app/data
-dokku config:set sealed-scouts FEED_DIR=/app/data/feed
+dokku storage:ensure-directory --chown false sealed-scouts-feed
+sudo chown 1000:1000 /var/lib/dokku/data/storage/sealed-scouts-feed       # the image runs as node (uid 1000)
+dokku storage:mount sealed-scouts /var/lib/dokku/data/storage/sealed-scouts-feed:/app/feed-data
+dokku config:set sealed-scouts FEED_DIR=/app/feed-data
 ```
+
+A fresh folder can be seeded with a copy of another watchtower's `feed/` first. `RUN_WATCHTOWER=0` serves the folder
+as it is, with no watchtower in the container.
 
 ### Deploy script
 

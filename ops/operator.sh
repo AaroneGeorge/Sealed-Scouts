@@ -13,6 +13,7 @@ running() { [[ -f "$PID" ]] && kill -0 "$(cat "$PID")" 2>/dev/null; }
 
 case "${1:-status}" in
   start)
+    if systemctl is-active --quiet sealed-scouts-operator.service 2>/dev/null; then echo "running as sealed-scouts-operator.service"; exit 0; fi
     if running; then echo "already running (pid $(cat "$PID"))"; exit 0; fi
     # shellcheck disable=SC1091
     source "$REPO/ops/env.local.sh"

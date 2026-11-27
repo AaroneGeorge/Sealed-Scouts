@@ -1,5 +1,6 @@
 // Polite HTTP for shared public endpoints: a clear User-Agent, a minimum gap between requests to the
-// same host, and exponential backoff with full jitter on 429, 5xx and network errors.
+// same host, and exponential backoff with full jitter on 429, 5xx and network errors. A 429 with Retry-After
+// (the testnet's tx search answers "retry-after: 59") waits at least that long, up to maxRetryAfterMs.
 // Retry rule from "Exponential backoff and jitter" (AWS architecture blog).
 
 export interface HttpResponse {
@@ -8,6 +9,8 @@ export interface HttpResponse {
   statusText: string;
   json(): Promise<unknown>;
   text(): Promise<string>;
+  /** Present on real responses; read for Retry-After. */
+  headers?: { get(name: string): string | null };
 }
 export type FetchLike = (
   url: string,
@@ -22,6 +25,8 @@ export interface PoliteOptions {
   attempts?: number;
   baseDelayMs?: number;
   maxDelayMs?: number;
+  /** Longest Retry-After honoured, in ms. */
+  maxRetryAfterMs?: number;
   fetch?: FetchLike;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
@@ -40,6 +45,7 @@ export function politeFetch(opts: PoliteOptions): FetchLike {
   const attempts = opts.attempts ?? 6;
   const baseDelay = opts.baseDelayMs ?? 500;
   const maxDelay = opts.maxDelayMs ?? 20_000;
+  const maxRetryAfter = opts.maxRetryAfterMs ?? 120_000;
   // Next free slot per host; requests reserve a slot before they wait, so concurrent callers queue up.
   const nextSlot = new Map<string, number>();
 
@@ -54,13 +60,17 @@ export function politeFetch(opts: PoliteOptions): FetchLike {
     const host = new URL(url).host;
     const headers = { "user-agent": opts.userAgent, accept: "application/json", ...(init.headers ?? {}) };
     let lastError: unknown;
+    let retryAfter = 0;
     for (let attempt = 0; attempt < attempts; attempt++) {
-      if (attempt > 0) await sleep(Math.floor(random() * Math.min(maxDelay, baseDelay * 2 ** attempt)));
+      if (attempt > 0) await sleep(Math.max(retryAfter, Math.floor(random() * Math.min(maxDelay, baseDelay * 2 ** attempt))));
+      retryAfter = 0;
       await waitTurn(host);
       try {
         const res = await base(url, { ...init, headers });
         if (!RETRY_STATUS.has(res.status)) return res;
         lastError = new Error(`HTTP ${res.status} from ${host}`);
+        const seconds = Number(res.headers?.get("retry-after") ?? "");
+        if (res.status === 429 && Number.isFinite(seconds) && seconds > 0) retryAfter = Math.min(seconds * 1000, maxRetryAfter);
       } catch (err) {
         lastError = err;
       }

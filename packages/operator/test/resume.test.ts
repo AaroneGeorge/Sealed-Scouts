@@ -154,3 +154,42 @@ describe("back from a stop", () => {
     expect(h.operator.state.lastSettled).toBe("498");
   });
 });
+
+describe("after settling stalled", () => {
+  // Settling failed for many rounds while OPENs kept going (the live run: settled 3078, opened 4064, now ~5300).
+  const inCommit = (o: { params: { genesisHeight: bigint; roundBlocks: bigint } }, r: bigint) => o.params.genesisHeight + r * o.params.roundBlocks + 1n;
+
+  function stalled(lastSettled: string, lastOpened: string) {
+    const h = harness({ posted: new Set() });
+    h.operator.state.lastSettled = lastSettled;
+    h.operator.state.lastOpened = lastOpened;
+    const settled: bigint[] = [];
+    h.operator.refreshEntries = async () => {};
+    h.operator.settle = async (round: bigint) => {
+      settled.push(round);
+      h.operator.state.lastSettled = String(round);
+    };
+    return { h, settled };
+  }
+
+  it("skips the opened rounds too old to matter, then opening resumes at the current round", async () => {
+    const { h, settled } = stalled("3078", "4064");
+    await h.operator.settleRounds(inCommit(h.operator, 5300n));
+    expect(settled).toEqual([]);
+    expect(h.store.load().lastSettled).toBe("4064");
+    await h.operator.openRounds(inCommit(h.operator, 5300n));
+    expect(h.operator.state).toMatchObject({ lastOpened: "5299", lastSettled: "5299" });
+  });
+
+  it("still settles the recent opened rounds one by one", async () => {
+    const { h, settled } = stalled("480", "499");
+    await h.operator.settleRounds(inCommit(h.operator, 500n));
+    expect(settled).toEqual([490n, 491n, 492n, 493n, 494n, 495n, 496n, 497n, 498n, 499n]);
+  });
+
+  it("leaves a short lag alone", async () => {
+    const { h, settled } = stalled("495", "499");
+    await h.operator.settleRounds(inCommit(h.operator, 500n));
+    expect(settled).toEqual([496n, 497n, 498n, 499n]);
+  });
+});

@@ -15,8 +15,11 @@ export interface TowerSource {
   batches(fromIndex: number): Promise<BatchInfo[]>;
   /** The scout's registered ML-DSA-87 key, or undefined when it has none. */
   pqKey(scout: string): Promise<Uint8Array | undefined>;
-  /** The round as PriceFeed holds it; undefined when there is no feed contract to read. */
-  feedRound(round: bigint): Promise<FeedRound | undefined>;
+  /**
+   * The round as PriceFeed holds it; undefined when there is no feed contract to read. `postedAfter`: a height the
+   * round cannot have been posted before (its reveal end), so a live source searches the logs forward from there.
+   */
+  feedRound(round: bigint, postedAfter?: bigint): Promise<FeedRound | undefined>;
   /**
    * Who may report in `round`, read as of its close height (the operator's rule). Without it the tower uses
    * TowerConfig.scouts, or every poster with a registered key (fixture mode). Throws when it cannot be read; the

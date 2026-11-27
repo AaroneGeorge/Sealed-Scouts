@@ -31,12 +31,17 @@ export function liveSource(chain: Chain, d: Pick<Deployment, "rollupId" | "scout
   const posted = new Map<bigint, Posted>();
   let twoSig: Promise<boolean> | undefined;
 
-  /** postRound's arguments, from the RoundPosted event (storage keeps only part of them). Newest blocks first. */
-  async function postedRound(round: bigint): Promise<Posted | undefined> {
+  /**
+   * postRound's arguments, from the RoundPosted event (storage keeps only part of them). From `after` forward when
+   * the round's reveal end is known (the event is then nearly always in the first chunk), else newest blocks first.
+   */
+  async function postedRound(round: bigint, after?: bigint): Promise<Posted | undefined> {
     if (posted.has(round)) return posted.get(round);
     const latest = await pc.getBlockNumber();
-    for (let to = latest; to >= 0n && latest - to < LOG_LOOKBACK; to -= LOG_CHUNK) {
-      const from = to >= LOG_CHUNK ? to - LOG_CHUNK + 1n : 0n;
+    const chunks: [bigint, bigint][] = [];
+    if (after !== undefined) for (let from = after; from <= latest; from += LOG_CHUNK) chunks.push([from, from + LOG_CHUNK - 1n < latest ? from + LOG_CHUNK - 1n : latest]);
+    else for (let to = latest; to >= 0n && latest - to < LOG_LOOKBACK; to -= LOG_CHUNK) chunks.push([to >= LOG_CHUNK ? to - LOG_CHUNK + 1n : 0n, to]);
+    for (const [from, to] of chunks) {
       const logs = await pc.getContractEvents({ address: priceFeed!, abi: PRICE_FEED_ABI, eventName: "RoundPosted", args: { round }, fromBlock: from, toBlock: to });
       const ev = logs.at(-1)?.args;
       if (ev?.att) {
@@ -48,7 +53,6 @@ export function liveSource(chain: Chain, d: Pick<Deployment, "rollupId" | "scout
         posted.set(round, p);
         return p;
       }
-      if (from === 0n) break;
     }
     return undefined;
   }
@@ -115,7 +119,7 @@ export function liveSource(chain: Chain, d: Pick<Deployment, "rollupId" | "scout
       const s = await fetchPqKeyStatus({ rest: chain.config.rest, address, fetch: chain.fetch });
       return s.registered ? s.publicKey : undefined;
     },
-    feedRound: async (round): Promise<FeedRound | undefined> => {
+    feedRound: async (round, postedAfter): Promise<FeedRound | undefined> => {
       if (!priceFeed) return undefined;
       const status = FEED_STATUS[Number(await read<number>("status", [round]))]!;
       const empty: FeedRound = { status, feedIds: [], medians: [], counts: [], reportsRoot: `0x${"00".repeat(32)}`, reportCount: 0, batchIndex: 0n };
@@ -126,7 +130,7 @@ export function liveSource(chain: Chain, d: Pick<Deployment, "rollupId" | "scout
       twoSig ??= read<boolean>("twoSigMode", []);
       return {
         ...empty, feedIds, medians: points.map((p) => p[0]), counts: points.map((p) => Number(p[1])), reportsRoot, reportCount: Number(reportCount), batchIndex,
-        ...(await postedRound(round)), twoSig: await twoSig,
+        ...(await postedRound(round, postedAfter)), twoSig: await twoSig,
       };
     },
   };

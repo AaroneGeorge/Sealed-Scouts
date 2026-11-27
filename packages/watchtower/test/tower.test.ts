@@ -110,6 +110,62 @@ describe("Watchtower on the simulated demo history", () => {
   });
 });
 
+describe("restart", () => {
+  it("takes back the settled rounds from its own feed dir and re-reads only the rest from the chain", async () => {
+    const dir = feedDir();
+    const first = new Watchtower(cfg, sim.asSource(), new FeedWriter(dir), undefined, () => {});
+    await first.sync();
+    const before = readJson(join(dir, "status.json"));
+
+    const asked: bigint[] = [];
+    const source = { ...sim.asSource(), feedRound: async (r: bigint, after?: bigint) => (asked.push(r), sim.asSource().feedRound(r, after)) };
+    const feed = new FeedWriter(dir);
+    const second = new Watchtower(cfg, source, feed, undefined, () => {});
+    // Settled = match / corrected / no-quorum with a feed that is no longer pending; the rest is checked again.
+    const settled = feed.rounds().filter((r) => ["match", "corrected", "no-quorum"].includes(r.verdict) && r.feed?.status !== "pending");
+    expect(second.restore(feed.rounds())).toBe(settled.length);
+    await second.sync();
+    expect(asked.sort()).toEqual(
+      before.latestRounds.map((r: { round: string }) => BigInt(r.round)).filter((r: bigint) => !settled.some((x) => BigInt(x.round) === r)).sort(),
+    );
+    const after = readJson(join(dir, "status.json"));
+    expect(after.rounds).toEqual(before.rounds);
+    expect(after.latestRounds).toEqual(before.latestRounds);
+    expect(after.operatorOmissions).toBe(before.operatorOmissions);
+  });
+
+  it("does not take back a round whose feed is still pending or whose verdict can change", () => {
+    const tower = new Watchtower(cfg, sim.asSource(), new FeedWriter(feedDir()), undefined, () => {});
+    expect(
+      tower.restore([
+        { round: "1", verdict: "match", feed: { status: "pending" } },
+        { round: "2", verdict: "not-posted", feed: { status: "none" } },
+        { round: "3", verdict: "median-wrong", feed: { status: "final" } },
+        { round: "4", verdict: "match", feed: { status: "final" } },
+      ]),
+    ).toBe(2); // round 4 settled; round 2 was never posted and round 4 is on the feed, so it never will be
+  });
+
+  it("stops re-reading a round that was never posted once a later round is on the feed", async () => {
+    const asked: bigint[] = [];
+    // Round 1 never reached PriceFeed; rounds 2 to 5 did, so PriceFeed will never take round 1.
+    const source = {
+      ...sim.asSource(),
+      feedRound: async (r: bigint, after?: bigint) => {
+        asked.push(r);
+        const f = await sim.asSource().feedRound(r, after);
+        return r === 1n ? { ...f!, status: "none" as const } : f;
+      },
+    };
+    const tower = new Watchtower(cfg, source, new FeedWriter(feedDir()), undefined, () => {});
+    await tower.sync();
+    expect(tower.roundCheck(1n)?.verdict).toBe("not-posted");
+    asked.length = 0;
+    await tower.sync();
+    expect(asked).not.toContain(1n);
+  });
+});
+
 describe("eligibility from the source (the operator's rule)", () => {
   it("asks once per check at the round's close height and applies the answer", async () => {
     const asked: [bigint, bigint][] = [];

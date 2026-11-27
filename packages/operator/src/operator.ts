@@ -7,6 +7,7 @@
 // The round clock is the main-chain height (packages/core round.ts), never the local clock.
 import {
   QLEDGER_DEPOSIT_POSTER_PREFIX,
+  QLEDGER_MAX_BATCH_ENTRIES,
   QledgerLedger,
   RestClient,
   encodeQledgerTx,
@@ -43,9 +44,14 @@ import { Relayer } from "./relay.js";
 import { addInBand, joinsFrom, rewardLines } from "./rewards.js";
 import { RUN_DIR, type OperatorState, type StateStore } from "./state.js";
 
-/** A round whose relay keeps failing is given up after this many tries (the round record keeps the error). */
 /** More missed rounds than this after a stop are skipped rather than settled one by one. */
 const MAX_CATCH_UP_ROUNDS = 3n;
+/**
+ * Opened rounds further behind the current round than this are skipped rather than settled: after a long stall
+ * each one would still need its own batch (one per tick), so the live rounds would wait hours behind them.
+ */
+const MAX_SETTLE_LAG_ROUNDS = 10n;
+/** A round whose relay keeps failing is given up after this many tries (the round record keeps the error). */
 const MAX_RELAY_ATTEMPTS = 3;
 
 /** Do not post an OPEN this close to the end of the open window: it might land too late. */
@@ -172,6 +178,12 @@ export class Operator {
 
   private async settleRounds(height: bigint): Promise<void> {
     if (this.state.lastOpened === undefined || this.state.lastSettled === undefined) return;
+    const stale = min(BigInt(this.state.lastOpened), roundOf(height, this.params) - MAX_SETTLE_LAG_ROUNDS - 1n);
+    if (stale > BigInt(this.state.lastSettled)) {
+      this.log(`rounds ${BigInt(this.state.lastSettled) + 1n} to ${stale}: opened but not settled in time; skipped, not settled`);
+      this.state.lastSettled = String(stale);
+      this.d.store.save(this.state);
+    }
     for (let round = BigInt(this.state.lastSettled) + 1n; round <= BigInt(this.state.lastOpened); round++) {
       if (height < roundWindows(round, this.params).revealEnd) break;
       await this.refreshEntries();
@@ -190,7 +202,7 @@ export class Operator {
 
     let plan;
     try {
-      plan = await planQledgerBatch(this.rest, { ...this.env, submitter: this.d.operator.address, ledger: this.ledger });
+      plan = await planQledgerBatch(await this.batchRest(), { ...this.env, submitter: this.d.operator.address, ledger: this.ledger });
     } catch (err) {
       const reason = (err as Error).message;
       // Only an empty inbox ends the round unanchored; any other failure is retried on the next tick.
@@ -253,6 +265,22 @@ export class Operator {
     this.state.lastSettled = String(round);
     this.d.store.save(this.state);
     this.log(`round ${round}: ${result.status}, ${result.leaves.length} reports, batch ${plan.input.batchIndex} (${plan.entries.length} entries) anchored with round hash ${rh.slice(0, 12)}… tx ${tx.txHash}`);
+  }
+
+  /**
+   * The RestClient planQledgerBatch reads the next batch's entries with. Its tx search covers only the posts the
+   * batch can consume: an unbounded search stops after the RDK's 5000-transaction cap, so once the rollup's
+   * history grows past that, entries beyond it read as "not found in the node's transaction index" forever.
+   */
+  private async batchRest(): Promise<RestClient> {
+    const inbox = await this.rest.getInbox(this.env.rollupId);
+    const consumed = BigInt(inbox.consumedSequence);
+    const head = BigInt(inbox.headSequence);
+    if (head <= consumed) return this.rest; // nothing to settle: planQledgerBatch says so
+    // A batch ends at most QLEDGER_MAX_BATCH_ENTRIES past the consumed point. If the head is nearer than that, it
+    // may move before the plan reads it, so the window is left open above.
+    const last = consumed + BigInt(QLEDGER_MAX_BATCH_ENTRIES);
+    return this.d.chain.inbox.searchWindow(this.env.rollupId, consumed + 1n, last <= head ? last : undefined);
   }
 
   /** The demo lie for this round, if one is set and the feed has a median to replace. Logged loudly. */
@@ -435,6 +463,8 @@ function summary(r: RoundResult) {
     skippedByOpener: r.skippedByOpener,
   };
 }
+
+const min = (a: bigint, b: bigint) => (a < b ? a : b);
 
 function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
   const out = new Uint8Array(a.length + b.length);

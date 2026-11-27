@@ -51,6 +51,27 @@ describe("politeFetch", () => {
     expect(h.sleeps.filter((s) => s >= 200)).toEqual([200, 400]);
   });
 
+  it("waits as long as a 429's Retry-After asks, up to the cap", async () => {
+    const calls: number[] = [];
+    const sleeps: number[] = [];
+    const answers = [
+      { ...res(429), headers: { get: (h: string) => (h === "retry-after" ? "59" : null) } },
+      { ...res(429), headers: { get: (h: string) => (h === "retry-after" ? "3600" : null) } },
+      res(200),
+    ];
+    const fetch = politeFetch({
+      userAgent: "sealed-scouts/0.1",
+      fetch: async () => (calls.push(1), answers.shift()!),
+      sleep: async (ms) => void sleeps.push(ms),
+      random: () => 0,
+      attempts: 4,
+      spacingMs: 0,
+      maxRetryAfterMs: 90_000,
+    });
+    expect((await fetch("https://api.example/txs")).status).toBe(200);
+    expect(sleeps).toEqual([59_000, 90_000]);
+  });
+
   it("retries network errors and gives up with an error, never an empty answer", async () => {
     const h = harness([new Error("ECONNRESET"), 429, 429, 429]);
     await expect(h.fetch("https://api.example/x")).rejects.toThrow(/failed after 4 attempts/);
